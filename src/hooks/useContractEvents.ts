@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { rpc as SorobanRpc } from "@stellar/stellar-sdk";
+import { rpc } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ContractEvent = SorobanRpc.Api.EventResponse;
+export type ContractEvent = rpc.Api.EventResponse;
 
 export interface UseContractEventsOptions {
   /** Soroban contract address (C...) */
@@ -102,9 +102,9 @@ export function useContractEvents(
     dispatch({ type: "LOADING" });
 
     try {
-      const server = new SorobanRpc.Server(config.sorobanRpcUrl);
+      const server = new rpc.Server(config.sorobanRpcUrl);
 
-      const filters: SorobanRpc.Server.GetEventsRequest["filters"] = [
+      const filters: rpc.Api.EventFilter[] = [
         {
           type: "contract",
           contractIds: [contractId],
@@ -112,7 +112,7 @@ export function useContractEvents(
         },
       ];
 
-      const request: SorobanRpc.Server.GetEventsRequest = {
+      const request: rpc.Server.GetEventsRequest = {
         filters,
         ...(startLedger !== undefined ? { startLedger } : {}),
       };

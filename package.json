@@ -3,19 +3,30 @@
   "version": "0.1.0",
   "description": "React hooks for Stellar and Soroban — useFreighter, useStellarAccount, useSorobanContract, useTransaction, and more.",
   "main": "dist/index.js",
-  "module": "dist/index.esm.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean --external react,@stellar/stellar-sdk,@stellar/freighter-api",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "size": "npm run build && size-limit"
   },
+  "size-limit": [
+     {
+       "path": "dist/index.mjs",
+       "limit": "200 KB"
+     },
+     {
+       "path": "dist/index.js",
+       "limit": "200 KB"
+     }
+   ],
   "keywords": [
     "stellar",
     "soroban",
@@ -38,15 +49,18 @@
     "react-dom": ">=18.0.0"
   },
   "dependencies": {
-    "@stellar/stellar-sdk": "^13.0.0",
-    "@stellar/freighter-api": "^2.0.0"
+    "@stellar/freighter-api": "^6.0.1",
+    "@stellar/stellar-sdk": "^13.0.0"
   },
   "devDependencies": {
+    "@size-limit/preset-small-lib": "^12.1.0",
+    "@types/node": "^25.9.1",
     "@types/react": "^18.3.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.57.0",
     "react": "^18.3.0",
+    "size-limit": "^12.1.0",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"

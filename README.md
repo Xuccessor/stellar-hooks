@@ -6,7 +6,7 @@
 npm install stellar-hooks
 ```
 
-`stellar-hooks` wires the [Stellar JS SDK v13](https://github.com/stellar/js-stellar-sdk) and the Freighter wallet API into a set of ergonomic React hooks so you can build Stellar dApps without copy-pasting the same boilerplate across 576 Wave repos.
+`stellar-hooks` wires the [Stellar JS SDK v13](https://github.com/stellar/js-stellar-sdk) and the Freighter wallet API into a set of ergonomic React hooks so you can build Stellar dApps without copy-pasting the same boilerplate across repos.
 
 ---
 
@@ -50,6 +50,18 @@ export function App() {
 ### `useFreighter()`
 
 Connect to and interact with the [Freighter](https://freighter.app) browser extension wallet, including arbitrary data signing via `signBlob`.
+
+### `useStellarAccount(publicKey)`
+
+Fetch and subscribe to a Stellar account's data, including balances, sequence number, and thresholds.
+
+### `useSorobanContract(options)`
+
+Invoke a Soroban smart-contract method. Handles simulation, auth, submission, and status polling in one hook.
+
+### `useTransaction(options)`
+
+Submit a pre-signed transaction XDR and poll until it is confirmed. Works with both Soroban (RPC) and classic Stellar (Horizon) transactions.
 
 ```ts
 const {
@@ -129,7 +141,7 @@ const { call, status, result, hash, error, reset } = useSorobanContract({
 </button>
 ```
 
-You may also pass a pre-configured `SorobanRpc.Server` instance via the `sorobanRpcServer` option to reuse an existing connection or custom transport:
+You may also pass a pre-configured `rpc.Server` instance via the `sorobanRpcServer` option to reuse an existing connection or custom transport:
 
 ```ts
 const { call, status } = useSorobanContract({
@@ -254,7 +266,7 @@ Please review our Contributing Guide and Code of Conduct for more details before
 
 - [ ] `usePayment()` — send XLM / SAT payments with one hook
 - [ ] `useClaimableBalance()` — list and claim claimable balances
-- [ ] `useContractEvents()` — subscribe to Soroban contract events via streaming
+- [x] `useContractEvents()` — subscribe to Soroban contract events via streaming
 - [ ] `usePathPayment()` — strict send / receive path payment hook
 - [ ] `useStellarToml()` — fetch and parse a domain's `stellar.toml`
 - [ ] React Query / SWR adapter (optional peer dependency)
