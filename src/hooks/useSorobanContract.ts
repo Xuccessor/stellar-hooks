@@ -74,21 +74,13 @@ function createReducer<TResult>() {
  * @returns {UseContractCallReturn}
  * @example
  * ```tsx
- * const {
- *   call,     // (overrides?) => Promise<TResult | null> — trigger the contract call
- *   status,   // "idle" | "building" | "signing" | "submitting" | "polling" | "success" | "error"
- *   result,   // TResult | null — raw xdr.ScVal; parse with scValToNative()
- *   hash,     // string | null — transaction hash on success
- *   error,    // Error | null
- *   isLoading,  // boolean — true while status is not idle/success/error
- *   isSuccess,  // boolean
- *   isError,    // boolean
- *   reset,    // () => void — return to "idle"
- * } = useSorobanContract({
- *   contractId: "CABC...XYZ",
- *   method: "increment",
- *   args: [nativeToScVal(1, { type: "u32" })],
- * });
+ * const { call, query, status, result } = useSorobanContract(
+ *   "CABC...XYZ",
+ *   {
+ *     method: "increment",
+ *     args: [nativeToScVal(1, { type: "u32" })],
+ *   }
+ * );
  *
  * return (
  *   <button onClick={() => call()} disabled={status !== "idle" && status !== "error"}>
@@ -98,11 +90,23 @@ function createReducer<TResult>() {
  * ```
  */
 export function useSorobanContract<TResult = unknown>(
-  options: ContractCallOptions,
-  options: ContractCallOptions<TResult>
+  contractId: string,
+  options: Omit<ContractCallOptions<TResult>, "contractId">
 ): UseContractCallReturn<TResult> {
   const { config } = useStellarContext();
   const { publicKey, networkPassphrase, signTransaction } = useFreighter();
+
+  // Destructure options to avoid dependency on the object reference itself
+  const {
+    method: baseMethod,
+    args: baseArgs = [],
+    fee: baseFee = BASE_FEE,
+    timeoutSeconds: baseTimeout = 30,
+    sorobanRpcServer,
+    onSuccess,
+    onError,
+    parseResult: baseParse,
+  } = options;
 
   const reducer = createReducer<TResult>();
   const [state, dispatch] = useReducer(reducer, {
@@ -113,17 +117,14 @@ export function useSorobanContract<TResult = unknown>(
   });
 
   const call = useCallback(
-    async (overrides?: Partial<ContractCallOptions<TResult>>): Promise<TResult | null> => {
+    async (overrides?: Partial<Omit<ContractCallOptions<TResult>, "contractId">>): Promise<TResult | null> => {
       const {
-        contractId,
-        method,
-        args = [],
-        fee = BASE_FEE,
-        timeoutSeconds = 30,
-        sorobanRpcServer,
-        onSuccess,
-        onError,
-      } = { ...options, ...overrides };
+        method = baseMethod,
+        args = baseArgs,
+        fee = baseFee,
+        timeoutSeconds = baseTimeout,
+        parseResult = baseParse,
+      } = overrides || {};
 
       if (!publicKey) {
         const err = new Error("No wallet connected. Call useFreighter().connect() first.");
@@ -149,8 +150,6 @@ export function useSorobanContract<TResult = unknown>(
         const passphrase = networkPassphrase ?? config.networkPassphrase;
 
         const tx = new TransactionBuilder(account, {
-          // TransactionBuilder requires fee as a string
-          fee: String(fee),
           fee: fee.toString(),
           networkPassphrase: passphrase,
         })
@@ -212,8 +211,10 @@ export function useSorobanContract<TResult = unknown>(
                 const v3 = meta.v3();
                 const sorobanMeta = v3.sorobanMeta();
                 if (sorobanMeta) {
-                  // Return the raw ScVal — callers can parse with scValToNative
-                  parsed = sorobanMeta.returnValue() as unknown as TResult;
+                  const scVal = sorobanMeta.returnValue();
+                  parsed = parseResult 
+                    ? parseResult(scVal) 
+                    : scVal as unknown as TResult;
                 }
               } catch {
                 // Non-fatal: return the hash as fallback
@@ -238,19 +239,17 @@ export function useSorobanContract<TResult = unknown>(
         return null;
       }
     },
-    [options, publicKey, networkPassphrase, signTransaction, config],
+    [contractId, baseMethod, baseArgs, baseFee, baseTimeout, sorobanRpcServer, onSuccess, onError, baseParse, publicKey, networkPassphrase, signTransaction, config],
   );
 
   const simulate = useCallback(
-    async (overrides?: Partial<ContractCallOptions>): Promise<rpc.Api.SimulateTransactionResponse> => {
+    async (overrides?: Partial<Omit<ContractCallOptions<TResult>, "contractId">>): Promise<rpc.Api.SimulateTransactionResponse> => {
       const {
-        contractId,
-        method,
-        args = [],
-        fee = BASE_FEE,
-        timeoutSeconds = 30,
-        sorobanRpcServer,
-      } = { ...options, ...overrides };
+        method = baseMethod,
+        args = baseArgs,
+        fee = baseFee,
+        timeoutSeconds = baseTimeout,
+      } = overrides || {};
 
       if (!publicKey) {
         throw new Error("No wallet connected. Call useFreighter().connect() first.");
@@ -283,7 +282,34 @@ export function useSorobanContract<TResult = unknown>(
         throw err instanceof Error ? err : new Error(String(err));
       }
     },
-    [options, publicKey, networkPassphrase, config]
+    [contractId, baseMethod, baseArgs, baseFee, baseTimeout, sorobanRpcServer, publicKey, networkPassphrase, config]
+  );
+
+  const query = useCallback(
+    async (overrides?: Partial<Omit<ContractCallOptions<TResult>, "contractId">>): Promise<TResult | null> => {
+      const parseResult = overrides?.parseResult ?? baseParse;
+      dispatch({ type: "BUILDING" });
+      try {
+        const sim = await simulate(overrides);
+        if (rpc.Api.isSimulationError(sim)) {
+          throw new Error(`Simulation failed: ${sim.error}`);
+        }
+        
+        let parsed: TResult | null = null;
+        if (sim.result) {
+          const scVal = sim.result.retval;
+          parsed = parseResult ? parseResult(scVal) : scVal as unknown as TResult;
+        }
+
+        dispatch({ type: "SUCCESS", payload: parsed as TResult, hash: "simulation" });
+        return parsed;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        dispatch({ type: "ERROR", payload: error });
+        return null;
+      }
+    },
+    [baseParse, simulate]
   );
 
   const reset = useCallback(() => dispatch({ type: "RESET" }), []);
@@ -295,6 +321,7 @@ export function useSorobanContract<TResult = unknown>(
     isError: state.status === "error",
     call,
     simulate,
+    query,
     reset,
   };
 }

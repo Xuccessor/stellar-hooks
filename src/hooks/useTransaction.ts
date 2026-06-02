@@ -148,7 +148,6 @@ export function useTransaction(
 
             if (getResult.status === rpc.Api.GetTransactionStatus.FAILED) {
               throw new Error(`Transaction failed on-chain: ${txHash}`);
-              throw new Error(`Transaction failed: ${txHash}`);
             }
           }
 
@@ -172,7 +171,6 @@ export function useTransaction(
         onError?.(error);
       }
     },
-    [mode, config, timeoutSeconds],
     [mode, config, timeoutSeconds, onSuccess, onError]
   );
 

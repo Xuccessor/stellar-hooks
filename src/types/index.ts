@@ -191,14 +191,29 @@ export interface ContractCallOptions<TResult = any> {
   parseResult?: (scVal: any) => TResult;
 }
 
-export interface UseContractCallReturn<TResult = unknown> extends TransactionState<TResult> {
-  call: (overrides?: Partial<ContractCallOptions>) => Promise<TResult | null>;
+export interface UseContractCallReturn<TResult = unknown>
+  extends TransactionState<TResult> {
+  /**
+   * Execute the contract call (Simulation -> Signing -> Submission -> Polling).
+   */
+  call: (
+    overrides?: Partial<Omit<ContractCallOptions<TResult>, "contractId">>
+  ) => Promise<TResult | null>;
+  /**
+   * Perform a simulation-only call to read contract state without submitting a transaction.
+   * Updates the hook's `result` and `status` upon success.
+   */
+  query: (
+    overrides?: Partial<Omit<ContractCallOptions<TResult>, "contractId">>
+  ) => Promise<TResult | null>;
   /**
    * Perform an isolated simulation of the contract call.
    * Returns the raw RPC simulation response including footprint, resource usage, and results.
    * Does not sign or submit a transaction.
    */
-  simulate: (overrides?: Partial<ContractCallOptions>) => Promise<rpc.Api.SimulateTransactionResponse>;
+  simulate: (
+    overrides?: Partial<Omit<ContractCallOptions<TResult>, "contractId">>
+  ) => Promise<rpc.Api.SimulateTransactionResponse>;
   reset: () => void;
 }
 

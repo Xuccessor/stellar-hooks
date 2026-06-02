@@ -127,16 +127,17 @@ const {
 
 ### `useStellarBalance(publicKey, options?)`
 
-Convenience wrapper around `useStellarAccount` that surfaces the XLM balance at the top level.
+Convenience wrapper around `useStellarAccount` that surfaces the XLM balance and optionally a specific asset balance.
 
 ```ts
 const {
-  balances,    // StellarBalance[]
-  xlmBalance,  // StellarBalance | null  (the native XLM entry)
+  balances,     // StellarBalance[]
+  xlmBalance,   // StellarBalance | null  (the native XLM entry)
+  assetBalance, // StellarBalance | null  (the specific asset requested, if any)
   isLoading,
   error,
   refetch,
-} = useStellarBalance("G...");
+} = useStellarBalance("G...", { code: "USDC", issuer: "G..." });
 ```
 
 ---
@@ -296,11 +297,12 @@ This repository uses Changesets for automated changelog generation, version bump
 
 ## Roadmap
 
-- [ ] `usePayment()` — send XLM / SAT payments with one hook
-- [ ] `useClaimableBalance()` — list and claim claimable balances
+- [x] `usePayment()` — send XLM / SAT payments with one hook
+- [x] `useClaimableBalance()` — list and claim claimable balances
 - [x] `useContractEvents()` — subscribe to Soroban contract events via streaming
 - [x] `usePathPayment()` — strict send / receive path payment hook
 - [ ] `useStellarToml()` — fetch and parse a domain's `stellar.toml`
+- [x] `useStellarToml()` — fetch and parse a domain's `stellar.toml`
 - [ ] React Query / SWR adapter (optional peer dependency)
 
 ---

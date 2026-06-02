@@ -5,7 +5,7 @@
  * @license MIT
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 import {
   isConnected,
   getPublicKey,
@@ -92,7 +92,7 @@ const STORAGE_KEY = "stellar-hooks:freighter-connected";
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
- * Connect to and interact with the Freighter browser wallet.
+ * Hook for connecting to and interacting with the Freighter browser wallet.
  *
  * @returns {UseFreighterReturn}
  * @example
@@ -128,11 +128,6 @@ export function useFreighter(): UseFreighterReturn {
       dispatch({ type: "SET_LOADING", payload: true });
 
       try {
-        // isConnected() returns Promise<boolean> in @stellar/freighter-api@2.0.0
-        const connected = await isConnected();
-        if (cancelled) return;
-
-        if (!connected) {
         const connection = await isConnected();
         // Handle both boolean (v2) and object (v6+) return types
         const isActuallyConnected =
@@ -141,61 +136,28 @@ export function useFreighter(): UseFreighterReturn {
         if (cancelled) return;
 
         if (!isActuallyConnected) {
-        const isConnectedResult = await isConnected();
-        if (cancelled) return;
-
-        if (!isConnectedResult.isConnected) {
           // Freighter is not installed or not connected yet
           dispatch({ type: "SET_NOT_INSTALLED" });
           return;
         }
-
-        // getPublicKey() throws if the user has not yet granted access —
-        // treat that as "installed but not yet connected".
-        try {
-          const publicKey = await getPublicKey();
-          if (cancelled) return;
-
-          if (publicKey) {
-            const networkDetails = await getNetworkDetails();
-            if (cancelled) return;
-
-            dispatch({
-              type: "SET_CONNECTED",
-              publicKey,
-              network: networkDetails.network,
-              networkPassphrase: networkDetails.networkPassphrase,
-            });
-          } else {
-            dispatch({ type: "SET_DISCONNECTED" });
-          }
-        } catch {
-          if (!cancelled) dispatch({ type: "SET_DISCONNECTED" });
-        // Check if an address is already authorised
-        const addressResult = await getAddress();
+        
+        const pkResult = await getPublicKey();
         if (cancelled) return;
+        
+        const publicKey = typeof pkResult === "string" ? pkResult : (pkResult as any)?.address;
 
-        if (addressResult && !addressResult.error && addressResult.address) {
-          const networkResult = await getNetwork();
+        if (publicKey) {
+          const networkDetails = (await getNetworkDetails()) as any;
           if (cancelled) return;
 
           dispatch({
             type: "SET_CONNECTED",
-            publicKey: addressResult.address,
-            network: networkResult.network ?? "",
-            networkPassphrase: networkResult.networkPassphrase ?? "",
+            publicKey,
+            network: networkDetails.network || "",
+            networkPassphrase: networkDetails.networkPassphrase || "",
           });
         } else {
-          // Check if we should try to restore from localStorage
-          const wasConnected = localStorage.getItem(STORAGE_KEY) === "true";
-          if (wasConnected) {
-            // User was previously connected, but getAddress() returned empty.
-            // This usually means the wallet is locked.
-            // We'll keep them as disconnected but we know it's installed.
-            dispatch({ type: "SET_DISCONNECTED" });
-          } else {
-            dispatch({ type: "SET_DISCONNECTED" });
-          }
+          dispatch({ type: "SET_DISCONNECTED" });
         }
       } catch (err) {
         if (!cancelled) {
@@ -241,30 +203,24 @@ export function useFreighter(): UseFreighterReturn {
     dispatch({ type: "SET_LOADING", payload: true });
     try {
       // requestAccess() returns the public key string on success
-      const publicKey = await requestAccess();
+      const result = await requestAccess();
+      const publicKey = typeof result === "string" ? result : (result as any)?.address;
+      const error = typeof result === "string" ? null : (result as any)?.error;
+
+      if (error) throw new Error(error);
       if (!publicKey) {
         throw new Error("Freighter access denied or no account selected");
       }
-      const networkDetails = await getNetworkDetails();
-      const address = await requestAccess();
-      if (!address) {
-        throw new Error("User rejected the connection request or no address returned");
-      }
-
-      const addressResult = await getAddress();
-      if (addressResult.error || !addressResult.address) {
-        throw new Error(addressResult.error ?? "Failed to get address");
-      }
-
-      const networkResult = await getNetwork();
+      
+      const networkDetails = (await getNetworkDetails()) as any;
       
       localStorage.setItem(STORAGE_KEY, "true");
       
       dispatch({
         type: "SET_CONNECTED",
         publicKey,
-        network: networkDetails.network,
-        networkPassphrase: networkDetails.networkPassphrase,
+        network: networkDetails.network || "",
+        networkPassphrase: networkDetails.networkPassphrase || "",
       });
     } catch (err) {
       dispatch({
@@ -281,52 +237,37 @@ export function useFreighter(): UseFreighterReturn {
 
   const signTx = useCallback(
     async (xdr: string, opts?: SignTransactionOptions): Promise<string> => {
-      // Freighter API v2 uses accountToSign; our public type exposes it as `address`
-      return signTransaction(xdr, {
+      const result = await signTransaction(xdr, {
         networkPassphrase: opts?.networkPassphrase,
         accountToSign: opts?.address,
       });
-      const signOptions: { networkPassphrase?: string; address?: string } = {};
-      if (opts?.networkPassphrase) signOptions.networkPassphrase = opts.networkPassphrase;
-      if (opts?.address) signOptions.address = opts.address;
-
-      const result = await signTransaction(xdr, signOptions);
-      if (result.error) throw new Error(result.error);
-      return result.signedTxXdr;
+      if (typeof result === "string") return result;
+      if ((result as any).error) throw new Error((result as any).error);
+      return (result as any).signedTxXdr;
     },
     [],
   );
 
   const signEntry = useCallback(
     async (entryPreimageXdr: string): Promise<string> => {
-      return signAuthEntry(entryPreimageXdr);
+      const result = await signAuthEntry(entryPreimageXdr);
+      if (typeof result === "string") return result;
+      if ((result as any).error) throw new Error((result as any).error);
+      return (result as any).signedAuthEntry;
     },
     [],
   );
 
   const signBlobCallback = useCallback(
     async (blob: string, opts?: { accountToSign?: string }): Promise<string> => {
-      return signBlob(blob, opts);
-  const signEntry = useCallback(async (entryPreimageXdr: string): Promise<string> => {
-    const result = await signAuthEntry(entryPreimageXdr);
-    if (result.error) throw new Error(result.error);
-    if (!result.signedAuthEntry) throw new Error("Failed to sign auth entry");
-    return result.signedAuthEntry;
-  }, []);
-
-  const signBlobCallback = useCallback(
-    async (blob: string, opts?: { accountToSign?: string }): Promise<string> => {
-      const signOptions: { address?: string } = {};
-      if (opts?.accountToSign) signOptions.address = opts.accountToSign;
-
-      const result = await signMessage(blob, signOptions);
-      if (result.error) throw new Error(result.error);
-
-      const signedMessage = result.signedMessage;
-       if (!signedMessage) throw new Error("Failed to sign blob");
-       if (typeof signedMessage === "string") return signedMessage;
-       if (Buffer.isBuffer(signedMessage)) return signedMessage.toString("base64");
-       throw new Error("Failed to sign blob");
+      const result = await signMessage(blob, {
+        accountToSign: opts?.accountToSign,
+      });
+      if (typeof result === "string") return result;
+      if ((result as any).error) throw new Error((result as any).error);
+      
+      // Handle cases where the result might be an object containing the signed message
+      return (result as any).signedMessage || (result as any).signedBlob || result;
     },
     [],
   );

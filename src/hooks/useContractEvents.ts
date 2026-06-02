@@ -6,7 +6,6 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { useState, useEffect } from "react";
 import { rpc } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
 
@@ -25,64 +24,93 @@ export interface UseContractEventsOptions {
   refetchInterval?: number;
 }
 
+interface EventsState {
+  events: rpc.Api.EventResponse[];
+  isLoading: boolean;
+  error: Error | null;
+}
+
+type Action =
+  | { type: "LOADING" }
+  | { type: "SUCCESS"; payload: rpc.Api.EventResponse[] }
+  | { type: "ERROR"; payload: Error };
+
+function reducer(state: EventsState, action: Action): EventsState {
+  switch (action.type) {
+    case "LOADING":
+      return { ...state, isLoading: true, error: null };
+    case "SUCCESS":
+      return { events: action.payload, isLoading: false, error: null };
+    case "ERROR":
+      return { ...state, isLoading: false, error: action.payload };
+    default:
+      return state;
+  }
+}
+
 export function useContractEvents(options: UseContractEventsOptions) {
   const { config } = useStellarContext();
-  const [events, setEvents] = useState<rpc.Api.EventResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [state, dispatch] = useReducer(reducer, {
+    events: [],
+    isLoading: false,
+    error: null,
+  });
 
-  useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    let isMounted = true;
-    let cursor: string | undefined;
+  const cursorRef = useRef<string | undefined>();
+  const isMounted = useRef(true);
 
-    async function fetchEvents() {
-      try {
-        setIsLoading(true);
-        const server = new rpc.Server(config.sorobanRpcUrl);
-        
-        const filter: rpc.Api.EventFilter = {
-          type: options.type || "contract",
-          contractIds: [options.contractId],
-          topics: options.topics,
-        };
+  const fetchEvents = useCallback(async () => {
+    try {
+      dispatch({ type: "LOADING" });
+      const server = new rpc.Server(config.sorobanRpcUrl);
+      
+      const filter: rpc.Api.EventFilter = {
+        type: options.type || "contract",
+        contractIds: [options.contractId],
+        topics: options.topics,
+      };
 
-        const response = await server.getEvents({
-          startLedger: options.startLedger,
-          filters: [filter],
-          pagination: {
-            cursor,
-            limit: options.limit || 100,
-          }
-        });
-
-        if (isMounted) {
-          if (response.events && response.events.length > 0) {
-            setEvents((prev) => {
-              const newEvents = response.events!.filter((e) => !prev.find((p) => p.id === e.id));
-              return [...prev, ...newEvents];
-            });
-            cursor = response.events[response.events.length - 1].pagingToken;
-          }
-          setError(null);
+      const response = await server.getEvents({
+        startLedger: options.startLedger,
+        filters: [filter],
+        pagination: {
+          cursor: cursorRef.current,
+          limit: options.limit || 100,
         }
-      } catch (err) {
-        if (isMounted) setError(err instanceof Error ? err : new Error(String(err)));
-      } finally {
-        if (isMounted) setIsLoading(false);
-        if (options.refetchInterval && isMounted) {
-          timeoutId = setTimeout(fetchEvents, options.refetchInterval);
+      });
+
+      if (isMounted.current && response.events) {
+        if (response.events.length > 0) {
+          cursorRef.current = response.events[response.events.length - 1].pagingToken;
         }
+        dispatch({ type: "SUCCESS", payload: response.events });
+      }
+    } catch (err) {
+      if (isMounted.current) {
+        dispatch({ type: "ERROR", payload: err instanceof Error ? err : new Error(String(err)) });
       }
     }
+  }, [config.sorobanRpcUrl, options.contractId, options.type, options.topics, options.startLedger, options.limit]);
 
+  useEffect(() => {
+    isMounted.current = true;
     fetchEvents();
 
-    return () => {
-      isMounted = false;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [config.sorobanRpcUrl, options.contractId, options.type, options.limit, options.startLedger, options.refetchInterval]);
+    let intervalId: ReturnType<typeof setInterval>;
+    if (options.refetchInterval && options.refetchInterval > 0) {
+      intervalId = setInterval(fetchEvents, options.refetchInterval);
+    }
 
-  return { data: events, isLoading, error };
+    return () => {
+      isMounted.current = false;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [fetchEvents, options.refetchInterval]);
+
+  return { 
+    ...state, 
+    refetch: fetchEvents,
+    stop: () => { isMounted.current = false; },
+    start: () => { isMounted.current = true; fetchEvents(); }
+  };
 }
