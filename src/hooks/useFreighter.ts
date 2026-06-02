@@ -128,11 +128,6 @@ export function useFreighter(): UseFreighterReturn {
       dispatch({ type: "SET_LOADING", payload: true });
 
       try {
-        // isConnected() returns Promise<boolean> in @stellar/freighter-api@2.0.0
-        const connected = await isConnected();
-        if (cancelled) return;
-
-        if (!connected) {
         const connection = await isConnected();
         // Handle both boolean (v2) and object (v6+) return types
         const isActuallyConnected =
@@ -141,61 +136,27 @@ export function useFreighter(): UseFreighterReturn {
         if (cancelled) return;
 
         if (!isActuallyConnected) {
-        const isConnectedResult = await isConnected();
-        if (cancelled) return;
-
-        if (!isConnectedResult.isConnected) {
           // Freighter is not installed or not connected yet
           dispatch({ type: "SET_NOT_INSTALLED" });
           return;
         }
 
-        // getPublicKey() throws if the user has not yet granted access —
-        // treat that as "installed but not yet connected".
-        try {
-          const publicKey = await getPublicKey();
-          if (cancelled) return;
-
-          if (publicKey) {
-            const networkDetails = await getNetworkDetails();
-            if (cancelled) return;
-
-            dispatch({
-              type: "SET_CONNECTED",
-              publicKey,
-              network: networkDetails.network,
-              networkPassphrase: networkDetails.networkPassphrase,
-            });
-          } else {
-            dispatch({ type: "SET_DISCONNECTED" });
-          }
-        } catch {
-          if (!cancelled) dispatch({ type: "SET_DISCONNECTED" });
-        // Check if an address is already authorised
-        const addressResult = await getAddress();
+        const publicKey = await getPublicKey();
         if (cancelled) return;
 
-        if (addressResult && !addressResult.error && addressResult.address) {
-          const networkResult = await getNetwork();
+        if (publicKey) {
+          const networkDetails = await getNetworkDetails();
           if (cancelled) return;
 
           dispatch({
             type: "SET_CONNECTED",
-            publicKey: addressResult.address,
-            network: networkResult.network ?? "",
-            networkPassphrase: networkResult.networkPassphrase ?? "",
+            publicKey,
+            network: networkDetails.network,
+            networkPassphrase: networkDetails.networkPassphrase,
           });
         } else {
-          // Check if we should try to restore from localStorage
           const wasConnected = localStorage.getItem(STORAGE_KEY) === "true";
-          if (wasConnected) {
-            // User was previously connected, but getAddress() returned empty.
-            // This usually means the wallet is locked.
-            // We'll keep them as disconnected but we know it's installed.
-            dispatch({ type: "SET_DISCONNECTED" });
-          } else {
-            dispatch({ type: "SET_DISCONNECTED" });
-          }
+          dispatch({ type: "SET_DISCONNECTED" });
         }
       } catch (err) {
         if (!cancelled) {

@@ -98,7 +98,6 @@ function createReducer<TResult>() {
  * ```
  */
 export function useSorobanContract<TResult = unknown>(
-  options: ContractCallOptions,
   options: ContractCallOptions<TResult>
 ): UseContractCallReturn<TResult> {
   const { config } = useStellarContext();
