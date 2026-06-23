@@ -21,6 +21,29 @@ export interface NetworkConfig {
   networkPassphrase: string;
 }
 
+export {
+  // Branded types
+  type StellarPublicKey,
+  type StellarContractId,
+  type StellarXdrString,
+  type StellarTxHash,
+  type StellarAssetIssuer,
+  
+  // Factory functions
+  asPublicKey,
+  asContractId,
+  asXdrString,
+  asTxHash,
+  asAssetIssuer,
+  
+  // Unsafe casts
+  unsafeAsPublicKey,
+  unsafeAsContractId,
+  unsafeAsXdrString,
+  unsafeAsTxHash,
+  unsafeAsAssetIssuer,
+} from "./branded";
+
 /**
  * Endpoint configuration for a private or self-hosted Stellar network.
  *
@@ -86,7 +109,7 @@ export const NETWORK_CONFIGS: Record<Exclude<StellarNetwork, "custom">, NetworkC
 // ─── Account ──────────────────────────────────────────────────────────────────
 
 export interface StellarAccountData {
-  accountId: string;
+  accountId: StellarPublicKey;
   balances: StellarBalance[];
   sequence: string;
   subentryCount: number;
@@ -109,7 +132,7 @@ export interface StellarAccountData {
 export interface StellarBalance {
   assetType: string;
   assetCode?: string;
-  assetIssuer?: string;
+  assetIssuer?: StellarAssetIssuer;
   balance: string;
   /** Parsed as a float for convenience */
   balanceFloat: number;
@@ -124,7 +147,7 @@ export interface StellarBalance {
 export interface FreighterState {
   isInstalled: boolean;
   isConnected: boolean;
-  publicKey: string | null;
+  publicKey: StellarPublicKey | null;
   network: string | null;
   networkPassphrase: string | null;
   isLoading: boolean;
@@ -134,8 +157,8 @@ export interface FreighterState {
 export interface UseFreighterReturn extends FreighterState {
   connect: () => Promise<void>;
   disconnect: () => void;
-  signTransaction: (xdr: string, opts?: SignTransactionOptions) => Promise<string>;
-  signAuthEntry: (entryPreimageXdr: string) => Promise<string>;
+  signTransaction: (xdr: StellarXdrString, opts?: SignTransactionOptions) => Promise<StellarXdrString>;
+  signAuthEntry: (entryPreimageXdr: StellarXdrString) => Promise<StellarXdrString>;
   signBlob: (blob: string, opts?: { accountToSign?: string }) => Promise<string>;
 }
 
@@ -159,7 +182,7 @@ export type TransactionStatus =
 
 export interface TransactionState<TResult = unknown> {
   status: TransactionStatus;
-  hash: string | null;
+  hash: StellarTxHash | null;
   result: TResult | null;
   error: Error | null;
   isLoading: boolean;
@@ -171,7 +194,7 @@ export interface TransactionState<TResult = unknown> {
 
 export interface ContractCallOptions<TResult = any> {
   /** Soroban contract address (C...) */
-  contractId: string;
+  contractId: StellarContractId;
   method: string;
   args?: unknown[];
   /** Fee in stroops. Defaults to 100 */

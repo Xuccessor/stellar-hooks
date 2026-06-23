@@ -9,7 +9,7 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import { Horizon } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
 import { parseAccountResponse } from "../utils";
-import type { StellarAccountData } from "../types";
+import type { StellarAccountData, StellarPublicKey } from "../types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -77,12 +77,12 @@ const initialState: State = {
 /**
  * Fetch and optionally poll a Stellar account from Horizon.
  *
- * @param {string | null | undefined} publicKey - The public key of the account to fetch.
+ * @param {StellarPublicKey | null | undefined} publicKey - The public key of the account to fetch.
  * @param {UseStellarAccountOptions} [options={}] - Configuration options.
  * @returns {UseStellarAccountReturn}
  */
 export function useStellarAccount(
-  publicKey: string | null | undefined,
+  publicKey: StellarPublicKey | null | undefined,
   options: UseStellarAccountOptions = {}
 ): UseStellarAccountReturn {
   const { enabled = true, refetchInterval = 0 } = options;
