@@ -244,3 +244,65 @@ export interface StellarContextValue {
   config: NetworkConfig;
   network: StellarNetwork;
 }
+
+// ─── Zod Schemas ──────────────────────────────────────────────────────────────
+
+export {
+  // Balance schemas
+  BalanceLineNativeSchema,
+  BalanceLineAssetSchema,
+  BalanceLineLiquidityPoolSchema,
+  BalanceLineSchema,
+  // Account schemas
+  AccountThresholdsSchema,
+  AccountFlagsSchema,
+  AccountSignerSchema,
+  AccountResponseSchema,
+  // Parsed account schemas
+  StellarBalanceSchema,
+  StellarAccountDataSchema,
+  // Offer schemas
+  OfferAssetSchema,
+  OfferRecordSchema,
+  OfferCollectionSchema,
+  // Orderbook schemas
+  OrderbookPriceLevelSchema,
+  OrderbookRecordSchema,
+  // Transaction schemas
+  TransactionSubmissionResponseSchema,
+  // Claimable balance schemas
+  ClaimantPredicateSchema,
+  ClaimantSchema,
+  ClaimableBalanceRecordSchema,
+  ClaimableBalanceCollectionSchema,
+  ParsedClaimableBalanceRecordSchema,
+  // Soroban RPC schemas
+  SendTransactionResponseSchema,
+  GetTransactionResponseSchema,
+  SimulateTransactionResponseSchema,
+  LedgerEntryResultSchema,
+  // Network / config schemas
+  StellarNetworkSchema,
+  NetworkConfigSchema,
+  CustomNetworkConfigSchema,
+  // Stellar.toml schemas
+  StellarTomlCurrencySchema,
+  StellarTomlDataSchema,
+  // Validation helpers
+  validateHorizonResponse,
+  safeValidateHorizonResponse,
+} from "./schemas";
+
+export type {
+  AccountResponseParsed,
+  BalanceLineParsed,
+  StellarBalanceParsed,
+  StellarAccountDataParsed,
+  OfferRecordParsed,
+  OrderbookRecordParsed,
+  ClaimableBalanceRecordParsed,
+  TransactionSubmissionParsed,
+  SendTransactionParsed,
+  GetTransactionParsed,
+  NetworkConfigParsed,
+} from "./schemas";
