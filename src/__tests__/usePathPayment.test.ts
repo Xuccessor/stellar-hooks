@@ -94,7 +94,7 @@ const baseOptions = {
   destMin: "9",
 };
 
-function getHook(overrides = {}) {
+function useHook(overrides = {}) {
   return usePathPayment({ mode: "strict-send", ...baseOptions, ...overrides });
 }
 
@@ -106,7 +106,7 @@ describe("usePathPayment", () => {
   });
 
   it("returns correct initial state", () => {
-    const hook = getHook();
+    const hook = useHook();
     expect(hook.status).toBe("idle");
     expect(hook.hash).toBeNull();
     expect(hook.error).toBeNull();
@@ -119,7 +119,7 @@ describe("usePathPayment", () => {
 
   it("calls pathPaymentStrictSend when mode is strict-send", async () => {
     const { Operation } = await import("@stellar/stellar-sdk");
-    const hook = getHook({ mode: "strict-send" });
+    const hook = useHook({ mode: "strict-send" });
     await hook.submit();
 
     expect(Operation.pathPaymentStrictSend).toHaveBeenCalledWith(
@@ -134,7 +134,7 @@ describe("usePathPayment", () => {
 
   it("calls pathPaymentStrictReceive when mode is strict-receive", async () => {
     const { Operation } = await import("@stellar/stellar-sdk");
-    const hook = getHook({ mode: "strict-receive" });
+    const hook = useHook({ mode: "strict-receive" });
     await hook.submit();
 
     expect(Operation.pathPaymentStrictReceive).toHaveBeenCalledWith(
@@ -148,7 +148,7 @@ describe("usePathPayment", () => {
   });
 
   it("signs and submits the built transaction", async () => {
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     expect(mockSignTransaction).toHaveBeenCalledWith("built-xdr", {
@@ -159,7 +159,7 @@ describe("usePathPayment", () => {
 
   it("uses Asset.native() for native send asset", async () => {
     const { Asset } = await import("@stellar/stellar-sdk");
-    const hook = getHook({ sendAsset: { type: "native" } });
+    const hook = useHook({ sendAsset: { type: "native" } });
     await hook.submit();
 
     expect(Asset.native).toHaveBeenCalled();
@@ -167,7 +167,7 @@ describe("usePathPayment", () => {
 
   it("uses Asset constructor for credit dest asset", async () => {
     const { Asset } = await import("@stellar/stellar-sdk");
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     expect(Asset).toHaveBeenCalledWith("USDC", "GISSUER...");
@@ -175,7 +175,7 @@ describe("usePathPayment", () => {
 
   it("passes intermediate path assets to the operation", async () => {
     const { Operation } = await import("@stellar/stellar-sdk");
-    const hook = getHook({
+    const hook = useHook({
       mode: "strict-send",
       path: [{ type: "credit", code: "XLM2", issuer: "GPATH..." }],
     });

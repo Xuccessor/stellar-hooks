@@ -92,7 +92,7 @@ import { usePayment } from "../hooks/usePayment";
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-function getHook(overrides = {}) {
+function useHook(overrides = {}) {
   return usePayment({
     destination: "GDEST...",
     asset: { type: "native" },
@@ -109,7 +109,7 @@ describe("usePayment", () => {
   });
 
   it("returns the correct initial state", () => {
-    const hook = getHook();
+    const hook = useHook();
 
     expect(hook.status).toBe("idle");
     expect(hook.hash).toBeNull();
@@ -122,7 +122,7 @@ describe("usePayment", () => {
   });
 
   it("builds, signs, and submits an XLM payment", async () => {
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     expect(mockSignTransaction).toHaveBeenCalledWith("built-xdr", {
@@ -133,7 +133,7 @@ describe("usePayment", () => {
 
   it("attaches a memo when provided", async () => {
     const { Memo } = await import("@stellar/stellar-sdk");
-    const hook = getHook({ memo: "Thanks!" });
+    const hook = useHook({ memo: "Thanks!" });
     await hook.submit();
 
     expect(Memo.text).toHaveBeenCalledWith("Thanks!");
@@ -141,7 +141,7 @@ describe("usePayment", () => {
   });
 
   it("does not attach a memo when not provided", async () => {
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     expect(mockAddMemo).not.toHaveBeenCalled();
@@ -149,7 +149,7 @@ describe("usePayment", () => {
 
   it("uses Asset.native() for native asset type", async () => {
     const { Asset } = await import("@stellar/stellar-sdk");
-    const hook = getHook({ asset: { type: "native" } });
+    const hook = useHook({ asset: { type: "native" } });
     await hook.submit();
 
     expect(Asset.native).toHaveBeenCalled();
@@ -157,7 +157,7 @@ describe("usePayment", () => {
 
   it("uses a credit asset when asset type is credit", async () => {
     const { Asset } = await import("@stellar/stellar-sdk");
-    const hook = getHook({
+    const hook = useHook({
       asset: { type: "credit", code: "USDC", issuer: "GISSUER..." },
     });
     await hook.submit();
