@@ -33,6 +33,7 @@ export type {
 } from "./hooks/usePathPayment";
 
 export { useSorobanTokenBalance } from "./hooks/useSorobanTokenBalance";
+export { useWalletsKit } from "./hooks/useWalletsKit";
 export type {
   SorobanTokenBalanceState,
   UseSorobanTokenBalanceOptions,
@@ -62,6 +63,10 @@ export type {
   // Provider
   StellarProviderProps,
   StellarContextValue,
+  // Wallets Kit
+  WalletsKitOptions,
+  WalletsKitState,
+  UseWalletsKitReturn,
 } from "./types";
 
 // Hook-specific Types

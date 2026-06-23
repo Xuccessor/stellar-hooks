@@ -244,3 +244,50 @@ export interface StellarContextValue {
   config: NetworkConfig;
   network: StellarNetwork;
 }
+
+// ─── Stellar Wallets Kit ──────────────────────────────────────────────────────
+
+/** Init params forwarded to StellarWalletsKit.init(). */
+export interface WalletsKitOptions {
+  /** List of wallet modules to support. Pass `defaultModules()` for all built-in wallets. */
+  modules: unknown[];
+  /** Pre-select a wallet by its ID (e.g. "freighter"). */
+  selectedWalletId?: string;
+  /** Stellar network passphrase. Defaults to the StellarProvider network. */
+  network?: string;
+}
+
+export interface WalletsKitState {
+  /** Active wallet public key, null when not connected. */
+  publicKey: string | null;
+  /** Whether an address is currently connected. */
+  isConnected: boolean;
+  /** True while the connect (authModal) call is in-flight. */
+  isConnecting: boolean;
+  error: Error | null;
+}
+
+export interface UseWalletsKitReturn extends WalletsKitState {
+  /**
+   * Open the Stellar Wallets Kit auth modal so the user can pick a wallet.
+   * Resolves with the connected address on success.
+   */
+  connect: () => Promise<string | null>;
+  /** Clear the active address (does not call any wallet SDK disconnect). */
+  disconnect: () => void;
+  /** Sign a transaction XDR with the active wallet. */
+  signTransaction: (
+    xdr: string,
+    opts?: { networkPassphrase?: string; address?: string }
+  ) => Promise<string>;
+  /** Sign a Soroban auth entry with the active wallet. */
+  signAuthEntry: (
+    authEntry: string,
+    opts?: { networkPassphrase?: string; address?: string }
+  ) => Promise<string>;
+  /** Sign a message/blob with the active wallet. */
+  signMessage: (
+    message: string,
+    opts?: { networkPassphrase?: string; address?: string }
+  ) => Promise<string>;
+}
