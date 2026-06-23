@@ -67,22 +67,17 @@ export function useContractEvents(options: UseContractEventsOptions) {
       const filter: rpc.Api.EventFilter = {
         type: options.type || "contract",
         contractIds: [options.contractId],
-        topics: options.topics,
+        ...(options.topics !== undefined && { topics: options.topics }),
       };
 
-      const request: rpc.Api.GetEventsRequest = {
+      const response = await server.getEvents({
+        ...(options.startLedger !== undefined && { startLedger: options.startLedger }),
         filters: [filter],
         pagination: {
           cursor: cursorRef.current,
           limit: options.limit || 100,
         },
-      };
-
-      if (options.startLedger !== undefined) {
-        request.startLedger = options.startLedger;
-      }
-
-      const response = await server.getEvents(request);
+      });
 
       if (isMounted.current && response.events) {
         if (response.events.length > 0) {
