@@ -1,3 +1,10 @@
+/**
+ * @file usePayment.ts
+ * @description Hook for building and submitting Stellar payments.
+ * @package stellar-hooks
+ * @license MIT
+ */
+
 import { useCallback } from "react";
 import {
   Asset,
@@ -9,7 +16,9 @@ import {
 import { useStellarContext } from "../context";
 import { useTransaction } from "./useTransaction";
 import { useFreighter } from "./useFreighter";
-import type { TransactionStatus } from "../types";
+import type { TransactionStatus, StellarPublicKey, StellarAssetIssuer } from "../types";
+import { unsafeAsXdrString } from "../types";
+import { validatePublicKey } from "../utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,11 +29,11 @@ import type { TransactionStatus } from "../types";
  */
 export type PaymentAsset =
   | { type: "native" }
-  | { type: "credit"; code: string; issuer: string };
+  | { type: "credit"; code: string; issuer: StellarAssetIssuer };
 
 export interface UsePaymentOptions {
   /** Recipient Stellar address (G...) */
-  destination: string;
+  destination: StellarPublicKey;
   /** Asset to send */
   asset: PaymentAsset;
   /** Amount as a string, e.g. "10.5" */
@@ -35,8 +44,34 @@ export interface UsePaymentOptions {
   fee?: number;
   /** Polling timeout in seconds. Default: 60 */
   timeoutSeconds?: number;
+  /** Callback fired when the transaction is successfully confirmed. */
+  onSuccess?: (hash: string) => void;
+  /** Callback fired when the transaction fails or an error occurs. */
+  onError?: (error: Error) => void;
 }
 
+/**
+ * @example
+ * ```tsx
+ * const {
+ *   submit,    // () => Promise<void> — build, sign, and submit the payment
+ *   status,    // "idle" | "submitting" | "polling" | "success" | "error"
+ *   hash,      // string | null — transaction hash on success
+ *   isLoading, // boolean
+ *   isSuccess, // boolean
+ *   isError,   // boolean
+ *   error,     // Error | null
+ *   reset,     // () => void
+ * } = usePayment({
+ *   destination: "GBXXX...",
+ *   asset: { type: "native" },
+ *   amount: "10",
+ *   memo: "Thanks!",
+ * });
+ *
+ * return <button onClick={submit} disabled={isLoading}>Send XLM</button>;
+ * ```
+ */
 export interface UsePaymentReturn {
   /** Call this to build, sign, and submit the payment */
   submit: () => Promise<void>;
@@ -77,6 +112,8 @@ export function usePayment(options: UsePaymentOptions): UsePaymentReturn {
     memo,
     fee = 100,
     timeoutSeconds = 60,
+    onSuccess,
+    onError,
   } = options;
 
   const { config } = useStellarContext();
@@ -84,11 +121,18 @@ export function usePayment(options: UsePaymentOptions): UsePaymentReturn {
   const { submit: submitXdr, reset, ...txState } = useTransaction({
     mode: "classic",
     timeoutSeconds,
+    ...(onSuccess && { onSuccess }),
+    ...(onError && { onError }),
   });
 
   const submit = useCallback(async () => {
     if (!publicKey) {
       throw new Error("Freighter is not connected. Call connect() first.");
+    }
+
+    validatePublicKey(destination, "destination");
+    if (asset.type === "credit") {
+      validatePublicKey(asset.issuer, "asset.issuer");
     }
 
     // 1. Load the source account from Horizon to get the sequence number
@@ -124,7 +168,7 @@ export function usePayment(options: UsePaymentOptions): UsePaymentReturn {
     const builtXdr = builtTx.toXDR();
 
     // 5. Sign via Freighter
-    const signedXdr = await signTransaction(builtXdr, {
+    const signedXdr = await signTransaction(unsafeAsXdrString(builtXdr), {
       networkPassphrase: config.networkPassphrase,
     });
 

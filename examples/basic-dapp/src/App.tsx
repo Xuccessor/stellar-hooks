@@ -23,8 +23,17 @@ const COUNTER_CONTRACT = "CABC...XYZ";
 // ─── Inner components (must be inside <StellarProvider>) ───────────────────────
 
 function WalletSection() {
-  const { isInstalled, isConnected, publicKey, isLoading, error, connect, disconnect } =
-    useFreighter();
+  const {
+    isInstalled,
+    isConnected,
+    publicKey,
+    isLoading,
+    error,
+    networkPassphraseMismatch,
+    networkPassphraseWarning,
+    connect,
+    disconnect,
+  } = useFreighter();
 
   if (!isInstalled)
     return <p className="warn">Freighter wallet not detected. Install it first.</p>;
@@ -41,6 +50,9 @@ function WalletSection() {
       <p>
         ✅ Connected: <code>{publicKey}</code>
       </p>
+      {networkPassphraseMismatch && networkPassphraseWarning && (
+        <p className="warn">{networkPassphraseWarning}</p>
+      )}
       <button onClick={disconnect}>Disconnect</button>
       {error && <p className="error">{error.message}</p>}
     </div>

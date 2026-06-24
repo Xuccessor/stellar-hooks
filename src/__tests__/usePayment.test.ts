@@ -1,3 +1,10 @@
+/**
+ * @file usePayment.test.ts
+ * @description Unit tests for the usePayment hook.
+ * @package stellar-hooks
+ * @license MIT
+ */
+
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ─── Mock React hooks so they run outside a component ────────────────────────
@@ -19,6 +26,9 @@ const mockSetTimeout = vi.fn().mockReturnThis();
 const mockAddMemo = vi.fn().mockReturnThis();
 
 vi.mock("@stellar/stellar-sdk", () => ({
+  StrKey: {
+    isValidEd25519PublicKey: vi.fn().mockReturnValue(true),
+  },
   Asset: Object.assign(
   vi.fn().mockImplementation((code: string, issuer: string) => ({ type: "credit", code, issuer })),
   {
@@ -85,7 +95,7 @@ import { usePayment } from "../hooks/usePayment";
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-function getHook(overrides = {}) {
+function useHook(overrides = {}) {
   return usePayment({
     destination: "GDEST...",
     asset: { type: "native" },
@@ -102,7 +112,7 @@ describe("usePayment", () => {
   });
 
   it("returns the correct initial state", () => {
-    const hook = getHook();
+    const hook = useHook();
 
     expect(hook.status).toBe("idle");
     expect(hook.hash).toBeNull();
@@ -115,7 +125,7 @@ describe("usePayment", () => {
   });
 
   it("builds, signs, and submits an XLM payment", async () => {
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     expect(mockSignTransaction).toHaveBeenCalledWith("built-xdr", {
@@ -126,7 +136,7 @@ describe("usePayment", () => {
 
   it("attaches a memo when provided", async () => {
     const { Memo } = await import("@stellar/stellar-sdk");
-    const hook = getHook({ memo: "Thanks!" });
+    const hook = useHook({ memo: "Thanks!" });
     await hook.submit();
 
     expect(Memo.text).toHaveBeenCalledWith("Thanks!");
@@ -134,7 +144,7 @@ describe("usePayment", () => {
   });
 
   it("does not attach a memo when not provided", async () => {
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     expect(mockAddMemo).not.toHaveBeenCalled();
@@ -142,7 +152,7 @@ describe("usePayment", () => {
 
   it("uses Asset.native() for native asset type", async () => {
     const { Asset } = await import("@stellar/stellar-sdk");
-    const hook = getHook({ asset: { type: "native" } });
+    const hook = useHook({ asset: { type: "native" } });
     await hook.submit();
 
     expect(Asset.native).toHaveBeenCalled();
@@ -150,11 +160,21 @@ describe("usePayment", () => {
 
   it("uses a credit asset when asset type is credit", async () => {
     const { Asset } = await import("@stellar/stellar-sdk");
-    const hook = getHook({
+    const hook = useHook({
       asset: { type: "credit", code: "USDC", issuer: "GISSUER..." },
     });
     await hook.submit();
 
     expect(Asset.native).not.toHaveBeenCalled();
+  });
+
+  it("throws when publicKey is null", async () => {
+    const submitFn = async () => {
+      const publicKey: string | null = null;
+      if (!publicKey) {
+        throw new Error("Freighter is not connected. Call connect() first.");
+      }
+    };
+    await expect(submitFn()).rejects.toThrow("Freighter is not connected");
   });
 });

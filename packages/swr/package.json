@@ -1,0 +1,58 @@
+{
+  "name": "@stellar-hooks/swr",
+  "version": "0.1.0",
+  "description": "SWR adapter for stellar-hooks — use Stellar and Soroban React hooks with SWR caching and revalidation.",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "docs:build": "typedoc",
+    "docs:clean": "rm -rf ../../docs/api/swr"
+  },
+  "keywords": [
+    "stellar",
+    "soroban",
+    "react",
+    "hooks",
+    "swr",
+    "web3",
+    "freighter",
+    "blockchain",
+    "dapp",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dark-princezz/stellar-hooks.git",
+    "directory": "packages/swr"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0",
+    "swr": ">=2.0.0",
+    "stellar-hooks": ">=0.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "react": "^18.3.0",
+    "stellar-hooks": "workspace:*",
+    "swr": "^2.2.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}

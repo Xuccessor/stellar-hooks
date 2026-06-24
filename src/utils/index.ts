@@ -1,32 +1,31 @@
-import { Horizon } from "@stellar/stellar-sdk";
-import type { StellarBalance, StellarAccountData } from "../types";
+/**
+ * @file index.ts
+ * @description Utility functions for the stellar-hooks library.
+ * @package stellar-hooks
+ */
+
+import type { Horizon } from "@stellar/stellar-sdk";
+import type { StellarAccountData } from "../types";
+import { unsafeAsPublicKey, unsafeAsAssetIssuer } from "../types";
+
+export {
+  validatePublicKey,
+  validateContractId,
+  validateOptionalPublicKey,
+  validateOptionalContractId,
+  ValidationError,
+} from "./validation";
 
 /**
- * Parse a raw Horizon AccountResponse into the friendlier StellarAccountData shape.
+ * Transforms a raw Horizon AccountResponse into the library's internal StellarAccountData format.
  */
-export function parseAccountResponse(
-  raw: Horizon.AccountResponse
-): StellarAccountData {
-  const balances: StellarBalance[] = raw.balances.map((b) => {
-    const isNative = b.asset_type === "native";
-    return {
-      assetType: b.asset_type,
-      assetCode: "asset_code" in b ? b.asset_code : undefined,
-      assetIssuer: "asset_issuer" in b ? b.asset_issuer : undefined,
-      balance: b.balance,
-      balanceFloat: parseFloat(b.balance),
-      buyingLiabilities: "buying_liabilities" in b ? b.buying_liabilities : "0",
-      sellingLiabilities: "selling_liabilities" in b ? b.selling_liabilities : "0",
-      limit: "limit" in b ? b.limit : undefined,
-      isNative,
-    };
-  });
-
+export function parseAccountResponse(raw: Horizon.AccountResponse): StellarAccountData {
   return {
-    accountId: raw.account_id,
-    balances,
+    accountId: unsafeAsPublicKey(raw.account_id),
     sequence: raw.sequence,
     subentryCount: raw.subentry_count,
+    numSponsored: (raw as Horizon.AccountResponse & { num_sponsored?: number }).num_sponsored ?? 0,
+    numSponsoring: (raw as Horizon.AccountResponse & { num_sponsoring?: number }).num_sponsoring ?? 0,
     thresholds: {
       lowThreshold: raw.thresholds.low_threshold,
       medThreshold: raw.thresholds.med_threshold,
@@ -36,32 +35,62 @@ export function parseAccountResponse(
       authRequired: raw.flags.auth_required,
       authRevocable: raw.flags.auth_revocable,
       authImmutable: raw.flags.auth_immutable,
-      authClawbackEnabled: raw.flags.auth_clawback_enabled ?? false,
+      authClawbackEnabled: raw.flags.auth_clawback_enabled,
     },
+    balances: raw.balances
+      .filter((b) => b.asset_type !== "liquidity_pool_shares")
+      .map((b) => {
+        const isAsset = b.asset_type === "credit_alphanum4" || b.asset_type === "credit_alphanum12";
+        return {
+          assetType: b.asset_type,
+          ...(isAsset && { assetCode: (b as Horizon.HorizonApi.BalanceLineAsset).asset_code }),
+          ...(isAsset && { assetIssuer: unsafeAsAssetIssuer((b as Horizon.HorizonApi.BalanceLineAsset).asset_issuer) }),
+          balance: b.balance,
+          balanceFloat: parseFloat(b.balance),
+          buyingLiabilities: isAsset || b.asset_type === "native"
+            ? (b as Horizon.HorizonApi.BalanceLineAsset | Horizon.HorizonApi.BalanceLineNative).buying_liabilities
+            : "0",
+          sellingLiabilities: isAsset || b.asset_type === "native"
+            ? (b as Horizon.HorizonApi.BalanceLineAsset | Horizon.HorizonApi.BalanceLineNative).selling_liabilities
+            : "0",
+          ...(isAsset && { limit: (b as Horizon.HorizonApi.BalanceLineAsset).limit }),
+          isNative: b.asset_type === "native",
+        };
+      }),
     raw,
   };
 }
 
 /**
- * Clamp a polling interval between min and max ms with exponential back-off.
+ * Simple delay function for polling.
  */
-export function backoff(attempt: number, baseMs = 1000, maxMs = 10000): number {
-  return Math.min(baseMs * 2 ** attempt, maxMs);
-}
-
-/**
- * Sleep for `ms` milliseconds.
- */
-export function sleep(ms: number): Promise<void> {
+export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Type-safe assertion that a value is not null/undefined.
+ * Exponential backoff calculation for RPC polling.
  */
-export function assertDefined<T>(
-  value: T | null | undefined,
-  message: string
-): asserts value is T {
-  if (value == null) throw new Error(`[stellar-hooks] ${message}`);
+export function backoff(attempt: number, base = 1000) {
+  return Math.min(base * Math.pow(2, attempt), 10000);
+}
+
+// ─── Simple In-Memory Cache ───────────────────────────────────────────────────
+
+const cache = new Map<string, { data: unknown; expires: number }>();
+
+export function getCache<T>(key: string): T | null {
+  const item = cache.get(key);
+  if (!item) return null;
+  
+  if (Date.now() > item.expires) {
+    cache.delete(key);
+    return null;
+  }
+  
+  return item.data as T;
+}
+
+export function setCache<T>(key: string, data: T, ttl: number): void {
+  cache.set(key, { data, expires: Date.now() + ttl });
 }
