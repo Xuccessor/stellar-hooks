@@ -42,12 +42,14 @@ function getNetworkPassphraseMismatch(
       walletPassphrase !== expectedPassphrase
   );
 }
+import type { FreighterState, SignTransactionOptions, UseFreighterReturn } from "../types";
+import { asPublicKey, unsafeAsXdrString } from "../types";
 
 // ─── State Machine ────────────────────────────────────────────────────────────
 
 type Action =
   | { type: "SET_LOADING"; payload: boolean }
-  | { type: "SET_CONNECTED"; publicKey: string; network: string; networkPassphrase: string }
+  | { type: "SET_CONNECTED"; publicKey: StellarPublicKey; network: string; networkPassphrase: string }
   | { type: "SET_DISCONNECTED" }
   | { type: "SET_NOT_INSTALLED" }
   | { type: "SET_ERROR"; payload: Error };
@@ -108,7 +110,7 @@ const initial: Omit<FreighterState, "networkPassphraseMismatch" | "networkPassph
  * ```tsx
  * const { isConnected, publicKey, connect } = useFreighter();
  *
- * if (!isConnected) return <button onClick={connect}>Connect Wallet</button>;
+ * if (!isConnected) return <button onClick={connect}>Connect</button>;
  * return <p>Connected: {publicKey}</p>;
  * ```
  */
@@ -155,7 +157,7 @@ export function useFreighter(options?: UseFreighterOptions): UseFreighterReturn 
           if (cancelled) return;
           dispatch({
             type: "SET_CONNECTED",
-            publicKey: address,
+            publicKey: asPublicKey(address),
             network: networkDetails.network ?? "",
             networkPassphrase: networkDetails.networkPassphrase ?? "",
           });
@@ -183,7 +185,7 @@ export function useFreighter(options?: UseFreighterOptions): UseFreighterReturn 
       const networkDetails = await getNetworkDetails();
       dispatch({
         type: "SET_CONNECTED",
-        publicKey: address,
+        publicKey: asPublicKey(address),
         network: networkDetails.network ?? "",
         networkPassphrase: networkDetails.networkPassphrase ?? "",
       });
@@ -197,19 +199,19 @@ export function useFreighter(options?: UseFreighterOptions): UseFreighterReturn 
   }, []);
 
   const signTx = useCallback(
-    async (xdr: string, opts?: SignTransactionOptions): Promise<string> => {
+    async (xdr: StellarXdrString, opts?: SignTransactionOptions): Promise<StellarXdrString> => {
       const { signedTxXdr, error } = await signTransaction(xdr, {
-  ...(opts?.networkPassphrase && { networkPassphrase: opts.networkPassphrase }),
-  ...(opts?.address && { address: opts.address }),
-});
+        ...(opts?.networkPassphrase && { networkPassphrase: opts.networkPassphrase }),
+        ...(opts?.address && { address: opts.address }),
+      });
       if (error) throw new Error(error.message);
-      return signedTxXdr;
+      return unsafeAsXdrString(signedTxXdr);
     },
     []
   );
 
   const signEntry = useCallback(
-    async (entryPreimageXdr: string): Promise<string> => {
+    async (entryPreimageXdr: StellarXdrString): Promise<StellarXdrString> => {
       const publicKey = state.publicKey;
       if (!publicKey) throw new Error("Wallet not connected");
       const { signedAuthEntry, error } = await signAuthEntry(entryPreimageXdr, {
@@ -217,7 +219,7 @@ export function useFreighter(options?: UseFreighterOptions): UseFreighterReturn 
       });
       if (error) throw new Error(error.message);
       if (!signedAuthEntry) throw new Error("No signed auth entry returned");
-      return signedAuthEntry;
+      return unsafeAsXdrString(signedAuthEntry);
     },
     [state.publicKey]
   );
