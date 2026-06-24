@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { Horizon, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
+import { AuthFlag, Horizon, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
-import { useTransaction } from "./useTransaction";
+import { useTransactionCore } from "./useTransactionCore";
 import { useFreighter } from "./useFreighter";
 import type { TransactionStatus } from "../types";
 import { unsafeAsXdrString } from "../types";
@@ -83,7 +83,7 @@ export function useAccountFlags(options: UseAccountFlagsOptions = {}): UseAccoun
 
   const { config } = useStellarContext();
   const { signTransaction, publicKey } = useFreighter();
-  const { submit: submitXdr, reset, ...txState } = useTransaction({
+  const { submit: submitXdr, reset, ...txState } = useTransactionCore({
     mode: "classic",
     timeoutSeconds,
     ...(onSuccess && { onSuccess }),
@@ -107,10 +107,10 @@ export function useAccountFlags(options: UseAccountFlagsOptions = {}): UseAccoun
 
     const setOptionsParams: Parameters<typeof Operation.setOptions>[0] = {};
     if (setFlagsMask !== undefined) {
-      setOptionsParams.setFlags = setFlagsMask as any;
+      setOptionsParams.setFlags = setFlagsMask as AuthFlag;
     }
     if (clearFlagsMask !== undefined) {
-      setOptionsParams.clearFlags = clearFlagsMask as any;
+      setOptionsParams.clearFlags = clearFlagsMask as AuthFlag;
     }
 
     const builder = new TransactionBuilder(sourceAccount, {

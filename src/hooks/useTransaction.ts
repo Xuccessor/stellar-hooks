@@ -1,176 +1,217 @@
 /**
  * @file useTransaction.ts
- * @description Hook for submitting and tracking Stellar/Soroban transactions.
+ * @description Hook for building, signing, and submitting Stellar transactions.
  * @package stellar-hooks
  * @license MIT
  */
 
-import { useCallback, useReducer } from "react";
-import { TransactionBuilder, Horizon } from "@stellar/stellar-sdk";
-import * as rpc from "@stellar/stellar-sdk/rpc";
+import { useCallback } from "react";
+import {
+  Horizon,
+  Memo,
+  Transaction,
+  TransactionBuilder,
+  xdr,
+} from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
-import type { TransactionState, TransactionStatus, StellarXdrString, StellarTxHash } from "../types";
-import { asTxHash } from "../types";
-import { sleep, backoff } from "../utils";
+import { useFreighter } from "./useFreighter";
+import { useTransactionCore } from "./useTransactionCore";
+import type { TransactionState, TransactionStatus } from "../types";
+import { unsafeAsXdrString } from "../types";
+import { validatePublicKey } from "../utils";
 
 // ─── Options ──────────────────────────────────────────────────────────────────
 
 export interface UseTransactionOptions {
-  /** "soroban" uses rpc; "classic" uses Horizon. Default: "soroban" */
-  mode?: "soroban" | "classic";
-  /** Polling timeout in seconds. Default: 60 */
+  /**
+   * "classic" submits through Horizon; "soroban" submits through the RPC server.
+   * Default: "classic"
+   */
+  mode?: "classic" | "soroban";
+  /** Base fee in stroops. Default: 100 */
+  fee?: number;
+  /** Optional text memo attached to every transaction built by this hook. */
+  memo?: string;
+  /**
+   * Wrap the inner transaction in a fee-bump sponsored by a separate account.
+   * `fee` is the total fee for the fee-bump envelope (in stroops as a string).
+   * `sponsor` defaults to the connected wallet's public key if omitted.
+   */
+  feeBump?: {
+    fee: string;
+    sponsor?: string;
+  };
+  /** Build and polling timeout in seconds. Default: 60 */
   timeoutSeconds?: number;
-  /** Callback fired when the transaction is successfully confirmed. */
+  /** Callback fired when the transaction is successfully confirmed on-chain. */
   onSuccess?: (hash: string) => void;
-  /** Callback fired when the transaction fails or an error occurs. */
+  /** Callback fired when an error occurs at any stage. */
   onError?: (error: Error) => void;
 }
 
-/**
- * @example
- * ```tsx
- * const {
- *   submit,    // (signedXdr: StellarXdrString) => Promise<void>
- *   status,    // "idle" | "submitting" | "polling" | "success" | "error"
- *   hash,      // StellarTxHash | null — transaction hash on success
- *   isLoading, // boolean
- *   isSuccess, // boolean
- *   isError,   // boolean
- *   error,     // Error | null
- *   reset,     // () => void
- * } = useTransaction({ mode: "classic" });
- *
- * async function handleSend() {
- *   const signedXdr = await freighter.signTransaction(builtXdr);
- *   await submit(signedXdr);
- * }
- * ```
- */
-export interface UseTransactionReturn extends TransactionState {
-  submit: (signedXdr: StellarXdrString) => Promise<void>;
+// ─── Return type ──────────────────────────────────────────────────────────────
+
+export interface UseTransactionReturn {
+  /**
+   * Build a transaction from the provided operations, sign it via the connected
+   * wallet, and submit it. Polls until the transaction is confirmed or times out.
+   *
+   * @param operations - One or more Stellar operations to include in the transaction.
+   */
+  submit: (operations: xdr.Operation[]) => Promise<void>;
+  /** Current lifecycle status. */
+  status: TransactionStatus;
+  /** Transaction hash once the transaction is confirmed on-chain. */
+  hash: TransactionState["hash"];
+  /** Error object if the transaction failed at any stage. */
+  error: Error | null;
+  isLoading: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  /** Reset state back to idle. */
   reset: () => void;
 }
-
-// ─── Reducer ──────────────────────────────────────────────────────────────────
-
-type Action =
-  | { type: "RESET" }
-  | { type: "STATUS"; payload: TransactionStatus }
-  | { type: "SUCCESS"; hash: StellarTxHash }
-  | { type: "ERROR"; payload: Error };
-
-function reducer(state: TransactionState, action: Action): TransactionState {
-  switch (action.type) {
-    case "RESET":
-      return { status: "idle", hash: null, result: null, error: null, isLoading: false, isSuccess: false, isError: false };
-    case "STATUS":
-      return { ...state, status: action.payload, isLoading: true, isSuccess: false, isError: false };
-    case "SUCCESS":
-      return { status: "success", hash: action.hash, result: null, error: null, isLoading: false, isSuccess: true, isError: false };
-    case "ERROR":
-      return { ...state, status: "error", error: action.payload, isLoading: false, isSuccess: false, isError: true };
-    default:
-      return state;
-  }
-}
-
-const initial: TransactionState = {
-  status: "idle",
-  hash: null,
-  result: null,
-  error: null,
-  isLoading: false,
-  isSuccess: false,
-  isError: false,
-};
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
- * Submit a pre-signed transaction XDR and poll until it is confirmed.
- * Works with both Soroban (RPC) and classic Stellar (Horizon) transactions.
+ * Build, sign, and submit a Stellar transaction from raw operations.
+ *
+ * Handles the full lifecycle:
+ * 1. Loads the source account sequence number from Horizon.
+ * 2. Builds a `TransactionBuilder` with the supplied operations, fee, and memo.
+ * 3. Optionally wraps the transaction in a fee-bump envelope.
+ * 4. Signs the transaction via the connected Freighter wallet.
+ * 5. Submits and polls until the transaction is confirmed (classic) or finalized (Soroban).
  *
  * @example
  * ```tsx
- * const { submit, status, hash, isLoading } = useTransaction();
+ * const { submit, status, hash, isLoading, error } = useTransaction({
+ *   fee: 200,
+ *   memo: "invoice #42",
+ *   onSuccess: (hash) => console.log("confirmed:", hash),
+ * });
  *
  * async function handleSend() {
- *   const signedXdr = await freighter.signTransaction(builtXdr);
- *   await submit(signedXdr);
+ *   await submit([
+ *     Operation.payment({
+ *       destination: "GDEST...",
+ *       asset: Asset.native(),
+ *       amount: "10",
+ *     }),
+ *   ]);
  * }
+ * ```
+ *
+ * @example Fee-bump sponsorship
+ * ```tsx
+ * const { submit } = useTransaction({
+ *   feeBump: { fee: "1000", sponsor: "GSPONSOR..." },
+ * });
  * ```
  */
 export function useTransaction(
   options: UseTransactionOptions = {},
 ): UseTransactionReturn {
-  const { mode = "soroban", timeoutSeconds = 60, onSuccess, onError } = options;
+  const {
+    mode = "classic",
+    fee = 100,
+    memo,
+    feeBump,
+    timeoutSeconds = 60,
+    onSuccess,
+    onError,
+  } = options;
+
   const { config } = useStellarContext();
-  const [state, dispatch] = useReducer(reducer, initial);
+  const { signTransaction, publicKey } = useFreighter();
+  const {
+    submit: submitXdr,
+    reset,
+    status,
+    hash,
+    error,
+    isLoading,
+    isSuccess,
+    isError,
+  } = useTransactionCore({
+    mode,
+    timeoutSeconds,
+    ...(onSuccess && { onSuccess }),
+    ...(onError && { onError }),
+  });
 
   const submit = useCallback(
-    async (signedXdr: StellarXdrString) => {
-      dispatch({ type: "STATUS", payload: "submitting" });
+    async (operations: xdr.Operation[]) => {
+      if (!publicKey) {
+        throw new Error("Freighter is not connected. Call connect() first.");
+      }
 
-      try {
-        if (mode === "soroban") {
-          // rpc is the correct namespace in @stellar/stellar-sdk@13 (previously SorobanRpc)
-          const server = new rpc.Server(config.sorobanRpcUrl);
-          const tx = TransactionBuilder.fromXDR(signedXdr, config.networkPassphrase);
+      if (operations.length === 0) {
+        throw new Error("At least one operation is required.");
+      }
 
-          const sendResult = await server.sendTransaction(tx);
+      // 1. Load the source account to obtain the current sequence number.
+      const server = new Horizon.Server(config.horizonUrl);
+      const sourceAccount = await server.loadAccount(publicKey);
 
-          if (sendResult.status === "ERROR") {
-            throw new Error(`Submission error: ${JSON.stringify(sendResult.errorResult)}`);
-          }
+      // 2. Build the transaction.
+      const builder = new TransactionBuilder(sourceAccount, {
+        fee: String(fee),
+        networkPassphrase: config.networkPassphrase,
+      }).setTimeout(timeoutSeconds);
 
-          const txHash = sendResult.hash;
-          dispatch({ type: "STATUS", payload: "polling" });
+      for (const op of operations) {
+        builder.addOperation(op);
+      }
 
-          // Poll
-          const deadline = Date.now() + timeoutSeconds * 1000;
-          let attempt = 0;
+      if (memo) {
+        builder.addMemo(Memo.text(memo));
+      }
 
-          while (Date.now() < deadline) {
-            await sleep(backoff(attempt));
-            attempt++;
+      const builtTx = builder.build();
 
-            const getResult = await server.getTransaction(txHash);
+      // 3. Sign the inner transaction.
+      const signedInnerXdr = await signTransaction(
+        unsafeAsXdrString(builtTx.toXDR()),
+        { networkPassphrase: config.networkPassphrase },
+      );
 
-            if (getResult.status === rpc.Api.GetTransactionStatus.SUCCESS) {
-              dispatch({ type: "SUCCESS", hash: asTxHash(txHash) });
-              onSuccess?.(txHash);
-              return;
-            }
+      // 4. Optionally wrap in a fee-bump envelope.
+      if (feeBump) {
+        const sponsorAddress = feeBump.sponsor ?? publicKey;
+        validatePublicKey(sponsorAddress, "feeBump.sponsor");
 
-            if (getResult.status === rpc.Api.GetTransactionStatus.FAILED) {
-              throw new Error(`Transaction failed on-chain: ${txHash}`);
-            }
-          }
-
-          throw new Error(`Transaction polling timed out: ${txHash}`);
-        } else {
-          // Classic Horizon path
-          const server = new Horizon.Server(config.horizonUrl);
-          const tx = TransactionBuilder.fromXDR(signedXdr, config.networkPassphrase);
-
-          // Horizon submitTransaction resolves when the tx is included in a ledger
-          const result = await server.submitTransaction(tx as Parameters<typeof server.submitTransaction>[0]);
-          dispatch({ type: "SUCCESS", hash: asTxHash(result.hash) });
-          onSuccess?.(result.hash);
-        }
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        dispatch({
-          type: "ERROR",
-          payload: error,
-        });
-        onError?.(error);
+        const innerTx = TransactionBuilder.fromXDR(
+          signedInnerXdr,
+          config.networkPassphrase,
+        );
+        const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
+          sponsorAddress,
+          feeBump.fee,
+          innerTx as Transaction,
+          config.networkPassphrase,
+        );
+        const signedFeeBumpXdr = await signTransaction(
+          unsafeAsXdrString(feeBumpTx.toXDR()),
+          { networkPassphrase: config.networkPassphrase, address: sponsorAddress },
+        );
+        await submitXdr(signedFeeBumpXdr);
+      } else {
+        await submitXdr(signedInnerXdr);
       }
     },
-    [mode, config, timeoutSeconds, onSuccess, onError]
+    [
+      publicKey,
+      config,
+      fee,
+      memo,
+      feeBump,
+      timeoutSeconds,
+      signTransaction,
+      submitXdr,
+    ],
   );
 
-  const reset = useCallback(() => dispatch({ type: "RESET" }), []);
-
-  return { ...state, submit, reset };
+  return { submit, reset, status, hash, error, isLoading, isSuccess, isError };
 }

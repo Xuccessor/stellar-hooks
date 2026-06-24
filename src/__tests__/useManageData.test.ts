@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file useManageData.test.ts
  * @description Unit tests for the useManageData hook.
  * @package stellar-hooks
@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ─── Mock React hooks so they run outside a component ────────────────────────
+// â”€â”€â”€ Mock React hooks so they run outside a component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
@@ -18,7 +18,7 @@ vi.mock("react", async () => {
   };
 });
 
-// ─── Mock @stellar/stellar-sdk ────────────────────────────────────────────────
+// â”€â”€â”€ Mock @stellar/stellar-sdk â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const mockBuild = vi.fn().mockReturnValue({ toXDR: () => "built-xdr" });
 const mockAddOperation = vi.fn().mockReturnThis();
@@ -40,7 +40,7 @@ vi.mock("@stellar/stellar-sdk", () => ({
   })),
 }));
 
-// ─── Mock context, useTransaction, and useFreighter ──────────────────────────
+// â”€â”€â”€ Mock context, useTransaction, and useFreighter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const mockSubmitXdr = vi.fn().mockResolvedValue(undefined);
 const mockReset = vi.fn();
@@ -55,8 +55,8 @@ vi.mock("../context", () => ({
   }),
 }));
 
-vi.mock("../hooks/useTransaction", () => ({
-  useTransaction: () => ({
+vi.mock("../hooks/useTransactionCore", () => ({
+  useTransactionCore: () => ({
     submit: mockSubmitXdr,
     reset: mockReset,
     status: "idle",
@@ -75,11 +75,11 @@ vi.mock("../hooks/useFreighter", () => ({
   }),
 }));
 
-// ─── Import AFTER mocks ───────────────────────────────────────────────────────
+// â”€â”€â”€ Import AFTER mocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 import { useManageData } from "../hooks/useManageData";
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("useManageData", () => {
   beforeEach(() => {
@@ -189,3 +189,5 @@ describe("useManageData", () => {
     await expect(submitFn()).rejects.toThrow("Freighter is not connected");
   });
 });
+
+

@@ -15,6 +15,7 @@ export { useStellarAccount } from "./hooks/useStellarAccount";
 export { useStellarBalance } from "./hooks/useStellarBalance";
 export { useSorobanContract } from "./hooks/useSorobanContract";
 export { useTransaction } from "./hooks/useTransaction";
+export type { UseTransactionOptions, UseTransactionReturn } from "./hooks/useTransaction";
 export { useLedgerEntry } from "./hooks/useLedgerEntry";
 export { useStellarToml } from "./hooks/useStellarToml";
 export { useAssetMetadata } from "./hooks/useAssetMetadata";

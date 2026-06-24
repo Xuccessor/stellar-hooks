@@ -1,5 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+﻿import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+import type { Operation } from "@stellar/stellar-sdk";
+
+function makeOp(): Operation {
+  return { type: "payment" } as unknown as Operation;
+}
 
 const { mockBuild, mockAddOperation, mockSetTimeout, mockAddMemo, mockFromXDR } = vi.hoisted(
   () => {
@@ -45,8 +50,8 @@ vi.mock("../context", () => ({
   }),
 }));
 
-vi.mock("../hooks/useTransaction", () => ({
-  useTransaction: () => ({
+vi.mock("../hooks/useTransactionCore", () => ({
+  useTransactionCore: () => ({
     submit: mockSubmitXdr,
     reset: mockTxReset,
     status: "idle",
@@ -95,7 +100,7 @@ describe("useMultiSig", () => {
 
     let xdr: string;
     await act(async () => {
-      xdr = await result.current.build([{ type: "payment", destination: "GDEST..." } as any]);
+      xdr = await result.current.build([{ type: "payment", destination: "GDEST..." } as unknown as Operation]);
     });
 
     expect(xdr!).toBe("built-xdr");
@@ -110,7 +115,7 @@ describe("useMultiSig", () => {
     const { result } = renderHook(() => useMultiSig());
 
     await act(async () => {
-      await result.current.build([{ type: "payment" } as any]);
+      await result.current.build([makeOp()]);
     });
 
     expect(result.current.unsignedXdr).toBe("built-xdr");
@@ -120,7 +125,7 @@ describe("useMultiSig", () => {
     const { result } = renderHook(() => useMultiSig());
 
     await act(async () => {
-      await result.current.build([{ type: "payment" } as any], { memo: "multi-sig-test" });
+      await result.current.build([makeOp()], { memo: "multi-sig-test" });
     });
 
     expect(mockAddMemo).toHaveBeenCalled();
@@ -130,7 +135,7 @@ describe("useMultiSig", () => {
     const { result } = renderHook(() => useMultiSig());
 
     await act(async () => {
-      await result.current.build([{ type: "payment" } as any]);
+      await result.current.build([makeOp()]);
     });
 
     expect(mockAddMemo).not.toHaveBeenCalled();
@@ -140,7 +145,7 @@ describe("useMultiSig", () => {
     const { result } = renderHook(() => useMultiSig());
 
     await act(async () => {
-      await result.current.build([{ type: "payment" } as any]);
+      await result.current.build([makeOp()]);
     });
 
     let signed: string;
@@ -157,9 +162,8 @@ describe("useMultiSig", () => {
   it("signs an externally-provided XDR when passed explicitly", async () => {
     const { result } = renderHook(() => useMultiSig());
 
-    let signed: string;
     await act(async () => {
-      signed = await result.current.sign("external-xdr");
+      await result.current.sign("external-xdr");
     });
 
     expect(mockSignTransaction).toHaveBeenCalledWith("external-xdr", {
@@ -181,7 +185,7 @@ describe("useMultiSig", () => {
     const { result } = renderHook(() => useMultiSig());
 
     await act(async () => {
-      await result.current.build([{ type: "payment" } as any]);
+      await result.current.build([makeOp()]);
     });
 
     expect(result.current.unsignedXdr).toBe("built-xdr");
@@ -208,9 +212,12 @@ describe("useMultiSig", () => {
     const { result } = renderHook(() => useMultiSig());
 
     await act(async () => {
-      await result.current.build([{ type: "payment" } as any]);
+      await result.current.build([makeOp()]);
     });
 
     expect(result.current.signatureCount).toBe(2);
   });
 });
+
+
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file usePathPayment.test.ts
  * @description Unit tests for the usePathPayment hook.
  * @package stellar-hooks
@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ─── Mock React ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Mock React â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
@@ -18,7 +18,7 @@ vi.mock("react", async () => {
   };
 });
 
-// ─── Mock @stellar/stellar-sdk ────────────────────────────────────────────────
+// â”€â”€â”€ Mock @stellar/stellar-sdk â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const mockBuild = vi.fn().mockReturnValue({ toXDR: () => "built-xdr" });
 const mockAddOperation = vi.fn().mockReturnThis();
@@ -48,7 +48,7 @@ vi.mock("@stellar/stellar-sdk", () => ({
   })),
 }));
 
-// ─── Mock context and hooks ───────────────────────────────────────────────────
+// â”€â”€â”€ Mock context and hooks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const mockSubmitXdr = vi.fn().mockResolvedValue(undefined);
 const mockReset = vi.fn();
@@ -64,8 +64,8 @@ vi.mock("../context", () => ({
   }),
 }));
 
-vi.mock("../hooks/useTransaction", () => ({
-  useTransaction: () => ({
+vi.mock("../hooks/useTransactionCore", () => ({
+  useTransactionCore: () => ({
     submit: mockSubmitXdr,
     reset: mockReset,
     status: "idle",
@@ -84,11 +84,11 @@ vi.mock("../hooks/useFreighter", () => ({
   }),
 }));
 
-// ─── Import AFTER mocks ───────────────────────────────────────────────────────
+// â”€â”€â”€ Import AFTER mocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 import { usePathPayment } from "../hooks/usePathPayment";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const baseOptions = {
   sendAsset: { type: "native" as const },
@@ -102,7 +102,7 @@ function useHook(overrides = {}) {
   return usePathPayment({ mode: "strict-send", ...baseOptions, ...overrides });
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("usePathPayment", () => {
   beforeEach(() => {
@@ -365,3 +365,5 @@ describe("usePathPayment", () => {
     });
   });
 });
+
+

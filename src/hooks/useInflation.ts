@@ -8,7 +8,7 @@
 import { useCallback } from "react";
 import { Horizon, Memo, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
-import { useTransaction } from "./useTransaction";
+import { useTransactionCore } from "./useTransactionCore";
 import { useFreighter } from "./useFreighter";
 import type { TransactionStatus } from "../types";
 import { unsafeAsXdrString } from "../types";
@@ -92,7 +92,7 @@ export function useInflation(options: UseInflationOptions = {}): UseInflationRet
 
   const { config } = useStellarContext();
   const { signTransaction, publicKey } = useFreighter();
-  const { submit: submitXdr, reset, ...txState } = useTransaction({
+  const { submit: submitXdr, reset, ...txState } = useTransactionCore({
     mode: "classic",
     timeoutSeconds,
     ...(onSuccess && { onSuccess }),

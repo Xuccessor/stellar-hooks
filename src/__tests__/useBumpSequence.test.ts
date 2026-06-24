@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file useBumpSequence.test.ts
  * @description Unit tests for the useBumpSequence hook.
  * @package stellar-hooks
@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ─── Mock React hooks ─────────────────────────────────────────────────────────
+// â”€â”€â”€ Mock React hooks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
@@ -18,7 +18,7 @@ vi.mock("react", async () => {
   };
 });
 
-// ─── Mock @stellar/stellar-sdk ───────────────────────────────────────────────
+// â”€â”€â”€ Mock @stellar/stellar-sdk â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const mockBuild = vi.fn().mockReturnValue({ toXDR: () => "built-xdr" });
 const mockAddOperation = vi.fn().mockReturnThis();
@@ -40,7 +40,7 @@ vi.mock("@stellar/stellar-sdk", () => ({
   })),
 }));
 
-// ─── Mock context and dependent hooks ────────────────────────────────────────
+// â”€â”€â”€ Mock context and dependent hooks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const mockSubmitXdr = vi.fn().mockResolvedValue(undefined);
 const mockReset = vi.fn();
@@ -55,8 +55,8 @@ vi.mock("../context", () => ({
   }),
 }));
 
-vi.mock("../hooks/useTransaction", () => ({
-  useTransaction: () => ({
+vi.mock("../hooks/useTransactionCore", () => ({
+  useTransactionCore: () => ({
     submit: mockSubmitXdr,
     reset: mockReset,
     status: "idle",
@@ -75,17 +75,17 @@ vi.mock("../hooks/useFreighter", () => ({
   }),
 }));
 
-// ─── Import AFTER mocks ───────────────────────────────────────────────────────
+// â”€â”€â”€ Import AFTER mocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 import { useBumpSequence } from "../hooks/useBumpSequence";
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function getHook(overrides: Partial<Parameters<typeof useBumpSequence>[0]> = {}) {
+function useHook(overrides: Partial<Parameters<typeof useBumpSequence>[0]> = {}) {
   return useBumpSequence({ bumpTo: "1000000", ...overrides });
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("useBumpSequence", () => {
   beforeEach(() => {
@@ -93,7 +93,7 @@ describe("useBumpSequence", () => {
   });
 
   it("returns the correct initial state", () => {
-    const hook = getHook();
+    const hook = useHook();
 
     expect(hook.status).toBe("idle");
     expect(hook.hash).toBeNull();
@@ -106,7 +106,7 @@ describe("useBumpSequence", () => {
   });
 
   it("builds, signs, and submits the BumpSequence transaction", async () => {
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     expect(mockSignTransaction).toHaveBeenCalledWith("built-xdr", {
@@ -117,7 +117,7 @@ describe("useBumpSequence", () => {
 
   it("passes bumpTo to Operation.bumpSequence", async () => {
     const { Operation } = await import("@stellar/stellar-sdk");
-    const hook = getHook({ bumpTo: "9999999" });
+    const hook = useHook({ bumpTo: "9999999" });
     await hook.submit();
 
     expect(Operation.bumpSequence).toHaveBeenCalledWith({ bumpTo: "9999999" });
@@ -125,7 +125,7 @@ describe("useBumpSequence", () => {
 
   it("accepts a bigint bumpTo value", async () => {
     const { Operation } = await import("@stellar/stellar-sdk");
-    const hook = getHook({ bumpTo: BigInt("12345678") });
+    const hook = useHook({ bumpTo: BigInt("12345678") });
     await hook.submit();
 
     expect(Operation.bumpSequence).toHaveBeenCalledWith({ bumpTo: "12345678" });
@@ -142,8 +142,11 @@ describe("useBumpSequence", () => {
   });
 
   it("calls reset", () => {
-    const hook = getHook();
+    const hook = useHook();
     hook.reset();
     expect(mockReset).toHaveBeenCalled();
   });
 });
+
+
+

@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Horizon, Memo, TransactionBuilder, Operation } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
 import { useFreighter } from "./useFreighter";
-import { useTransaction } from "./useTransaction";
+import { useTransactionCore } from "./useTransactionCore";
 import type { TransactionStatus } from "../types";
 import { unsafeAsXdrString } from "../types";
 
@@ -66,7 +66,7 @@ export function useMultiSig(options: UseMultiSigOptions = {}): UseMultiSigReturn
   const { fee = 100, timeoutSeconds = 60, onSuccess, onError } = options;
   const { config } = useStellarContext();
   const { signTransaction, publicKey } = useFreighter();
-  const { submit: submitXdr, reset: txReset, ...txState } = useTransaction({
+  const { submit: submitXdr, reset: txReset, ...txState } = useTransactionCore({
     mode: "classic",
     timeoutSeconds,
     ...(onSuccess && { onSuccess }),

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+﻿import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
@@ -42,8 +42,8 @@ vi.mock("../context", () => ({
   }),
 }));
 
-vi.mock("../hooks/useTransaction", () => ({
-  useTransaction: () => ({
+vi.mock("../hooks/useTransactionCore", () => ({
+  useTransactionCore: () => ({
     submit: mockSubmitXdr,
     reset: mockReset,
     status: "idle",
@@ -64,7 +64,7 @@ vi.mock("../hooks/useFreighter", () => ({
 
 import { useAccountFlags } from "../hooks/useAccountFlags";
 
-function getHook(overrides = {}) {
+function useHook(overrides = {}) {
   return useAccountFlags({
     setFlags: ["authRequired"],
     ...overrides,
@@ -77,7 +77,7 @@ describe("useAccountFlags", () => {
   });
 
   it("returns the correct initial state", () => {
-    const hook = getHook();
+    const hook = useHook();
 
     expect(hook.status).toBe("idle");
     expect(hook.hash).toBeNull();
@@ -90,7 +90,7 @@ describe("useAccountFlags", () => {
   });
 
   it("builds, signs, and submits a setOptions with setFlags", async () => {
-    const hook = getHook({ setFlags: ["authRequired", "authRevocable"] });
+    const hook = useHook({ setFlags: ["authRequired", "authRevocable"] });
     await hook.submit();
 
     expect(mockAddOperation).toHaveBeenCalledWith({
@@ -106,7 +106,7 @@ describe("useAccountFlags", () => {
   });
 
   it("builds, signs, and submits a setOptions with clearFlags", async () => {
-    const hook = getHook({ setFlags: undefined, clearFlags: ["authImmutable", "authClawbackEnabled"] });
+    const hook = useHook({ setFlags: undefined, clearFlags: ["authImmutable", "authClawbackEnabled"] });
     await hook.submit();
 
     expect(mockAddOperation).toHaveBeenCalledWith({
@@ -117,7 +117,7 @@ describe("useAccountFlags", () => {
   });
 
   it("builds with both setFlags and clearFlags", async () => {
-    const hook = getHook({ setFlags: ["authRequired"], clearFlags: ["authRevocable"] });
+    const hook = useHook({ setFlags: ["authRequired"], clearFlags: ["authRevocable"] });
     await hook.submit();
 
     expect(mockAddOperation).toHaveBeenCalledWith({
@@ -128,7 +128,7 @@ describe("useAccountFlags", () => {
   });
 
   it("throws when neither setFlags nor clearFlags are provided", async () => {
-    const hook = getHook({ setFlags: undefined });
+    const hook = useHook({ setFlags: undefined });
     await expect(hook.submit()).rejects.toThrow(
       "At least one of setFlags or clearFlags must be provided."
     );
@@ -144,3 +144,6 @@ describe("useAccountFlags", () => {
     await expect(submitFn()).rejects.toThrow("Freighter is not connected");
   });
 });
+
+
+

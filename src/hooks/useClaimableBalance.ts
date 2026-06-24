@@ -11,7 +11,7 @@ import {
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
-import { useTransaction } from "./useTransaction";
+import { useTransactionCore } from "./useTransactionCore";
 import { useFreighter } from "./useFreighter";
 import { unsafeAsXdrString, type TransactionStatus } from "../types";
 import { validatePublicKey } from "../utils";
@@ -192,7 +192,7 @@ export function useClaimBalance(
   const { onSuccess, onError } = options;
   const { config } = useStellarContext();
   const { signTransaction, publicKey } = useFreighter();
-  const { submit: submitXdr, reset, ...txState } = useTransaction({
+  const { submit: submitXdr, reset, ...txState } = useTransactionCore({
     mode: "classic",
     ...(onSuccess && { onSuccess }),
     ...(onError && { onError }),

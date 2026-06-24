@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file useTrustline.test.ts
  * @description Unit tests for the useTrustline hook.
  * @package stellar-hooks
@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ─── Mock React hooks so they run outside a component ────────────────────────
+// â”€â”€â”€ Mock React hooks so they run outside a component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
@@ -18,7 +18,7 @@ vi.mock("react", async () => {
   };
 });
 
-// ─── Mock @stellar/stellar-sdk ───────────────────────────────────────────────
+// â”€â”€â”€ Mock @stellar/stellar-sdk â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const mockBuild = vi.fn().mockReturnValue({ toXDR: () => "built-xdr" });
 const mockAddOperation = vi.fn().mockReturnThis();
@@ -41,7 +41,7 @@ vi.mock("@stellar/stellar-sdk", () => ({
   })),
 }));
 
-// ─── Mock context and dependent hooks ────────────────────────────────────────
+// â”€â”€â”€ Mock context and dependent hooks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const mockSubmitXdr = vi.fn().mockResolvedValue(undefined);
 const mockReset = vi.fn();
@@ -56,8 +56,8 @@ vi.mock("../context", () => ({
   }),
 }));
 
-vi.mock("../hooks/useTransaction", () => ({
-  useTransaction: () => ({
+vi.mock("../hooks/useTransactionCore", () => ({
+  useTransactionCore: () => ({
     submit: mockSubmitXdr,
     reset: mockReset,
     status: "idle",
@@ -76,13 +76,13 @@ vi.mock("../hooks/useFreighter", () => ({
   }),
 }));
 
-// ─── Import AFTER mocks ───────────────────────────────────────────────────────
+// â”€â”€â”€ Import AFTER mocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 import { useTrustline } from "../hooks/useTrustline";
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function getHook(overrides = {}) {
+function useHook(overrides = {}) {
   return useTrustline({
     code: "USDC",
     issuer: "GISSUER...",
@@ -90,7 +90,7 @@ function getHook(overrides = {}) {
   });
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("useTrustline", () => {
   beforeEach(() => {
@@ -98,7 +98,7 @@ describe("useTrustline", () => {
   });
 
   it("returns the correct initial state", () => {
-    const hook = getHook();
+    const hook = useHook();
 
     expect(hook.status).toBe("idle");
     expect(hook.hash).toBeNull();
@@ -111,7 +111,7 @@ describe("useTrustline", () => {
   });
 
   it("builds, signs, and submits a trustline change", async () => {
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     expect(mockSignTransaction).toHaveBeenCalledWith("built-xdr", {
@@ -122,7 +122,7 @@ describe("useTrustline", () => {
 
   it("calls Operation.changeTrust with the asset", async () => {
     const { Operation } = await import("@stellar/stellar-sdk");
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     expect(Operation.changeTrust).toHaveBeenCalledWith(
@@ -134,7 +134,7 @@ describe("useTrustline", () => {
 
   it("passes the limit to Operation.changeTrust when provided", async () => {
     const { Operation } = await import("@stellar/stellar-sdk");
-    const hook = getHook({ limit: "5000" });
+    const hook = useHook({ limit: "5000" });
     await hook.submit();
 
     expect(Operation.changeTrust).toHaveBeenCalledWith(
@@ -144,7 +144,7 @@ describe("useTrustline", () => {
 
   it("does not pass limit to Operation.changeTrust when not provided", async () => {
     const { Operation } = await import("@stellar/stellar-sdk");
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     const callArgs = (Operation.changeTrust as ReturnType<typeof vi.fn>).mock.calls[0][0];
@@ -153,7 +153,7 @@ describe("useTrustline", () => {
 
   it("calls Asset constructor with code and issuer", async () => {
     const { Asset } = await import("@stellar/stellar-sdk");
-    const hook = getHook();
+    const hook = useHook();
     await hook.submit();
 
     expect(Asset).toHaveBeenCalledWith("USDC", "GISSUER...");
@@ -169,3 +169,6 @@ describe("useTrustline", () => {
     await expect(submitFn()).rejects.toThrow("Freighter is not connected");
   });
 });
+
+
+

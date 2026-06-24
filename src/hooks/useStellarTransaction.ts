@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { Horizon, Transaction, TransactionBuilder, xdr } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
 import { useFreighter } from "./useFreighter";
-import { useTransaction } from "./useTransaction";
+import { useTransactionCore } from "./useTransactionCore";
 import { unsafeAsXdrString, type TransactionStatus } from "../types";
 import { validatePublicKey } from "../utils";
 
@@ -57,7 +57,7 @@ export function useStellarTransaction(options: UseStellarTransactionOptions = {}
   const { fee = 100, timeoutSeconds = 60, feeBump, onSuccess, onError } = options;
   const { config } = useStellarContext();
   const { signTransaction, publicKey } = useFreighter();
-  const { submit: submitXdr, reset, status, hash, error, isLoading, isSuccess, isError } = useTransaction({
+  const { submit: submitXdr, reset, status, hash, error, isLoading, isSuccess, isError } = useTransactionCore({
     mode: "classic",
     timeoutSeconds,
     ...(onSuccess && { onSuccess }),
