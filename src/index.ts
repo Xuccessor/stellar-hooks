@@ -72,6 +72,18 @@ export type {
   UseSorobanTokenBalanceOptions,
 } from "./hooks/useSorobanTokenBalance";
 
+export { useMultiSig } from "./hooks/useMultiSig";
+export type {
+  BuildOptions,
+  UseMultiSigOptions,
+  UseMultiSigReturn,
+} from "./hooks/useMultiSig";
+
+export { useTrustline } from "./hooks/useTrustline";
+export type {
+  UseTrustlineOptions,
+  UseTrustlineReturn,
+} from "./hooks/useTrustline";
 export { useCreateAccount } from "./hooks/useCreateAccount";
 export type { UseCreateAccountOptions, UseCreateAccountReturn } from "./hooks/useCreateAccount";
 

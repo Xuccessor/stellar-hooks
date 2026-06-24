@@ -70,6 +70,18 @@ export type {
   UseSorobanTokenBalanceOptions,
 } from "./useSorobanTokenBalance";
 
+export { useMultiSig } from "./useMultiSig";
+export type {
+  BuildOptions,
+  UseMultiSigOptions,
+  UseMultiSigReturn,
+} from "./useMultiSig";
+
+export { useTrustline } from "./useTrustline";
+export type {
+  UseTrustlineOptions,
+  UseTrustlineReturn,
+} from "./useTrustline";
 export { useCreateAccount } from "./useCreateAccount";
 export type { UseCreateAccountOptions, UseCreateAccountReturn } from "./useCreateAccount";
 
