@@ -3,7 +3,7 @@
   "changelog": [
     "@changesets/changelog-github",
     {
-      "repo": "dark-princezz/stellar-hooks"
+      "repo": "spiffamani/stellar-hooks"
     }
   ],
   "commit": false,
