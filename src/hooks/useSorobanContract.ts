@@ -18,6 +18,9 @@ import {
 } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
 import { useFreighter } from "./useFreighter";
+import type { ContractCallOptions, UseContractCallReturn, TransactionStatus, StellarContractId, StellarXdrString } from "../types";
+import { unsafeAsXdrString } from "../types";
+import { sleep, backoff } from "../utils";
 import type { ContractCallOptions, UseContractCallReturn, TransactionStatus } from "../types";
 import { sleep, backoff, validateContractId } from "../utils";
 
@@ -90,7 +93,7 @@ function createReducer<TResult>() {
  * ```
  */
 export function useSorobanContract<TResult = unknown>(
-  contractId: string,
+  contractId: StellarContractId,
   options: Omit<ContractCallOptions<TResult>, "contractId">
 ): UseContractCallReturn<TResult> {
   const { config } = useStellarContext();
@@ -172,7 +175,7 @@ export function useSorobanContract<TResult = unknown>(
         // ── 3. Sign ───────────────────────────────────────────────────────────
         dispatch({ type: "SIGNING" });
 
-        const signedXdr = await signTransaction(preparedTx.toXDR(), {
+        const signedXdr = await signTransaction(unsafeAsXdrString(preparedTx.toXDR()), {
           networkPassphrase: passphrase,
         });
 
