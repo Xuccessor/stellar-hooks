@@ -32,10 +32,8 @@
     "test:watch": "vitest",
     "prepare": "husky",
     "prepublishOnly": "npm run build",
+    "release": "semantic-release",
     "release:dry-run": "semantic-release --dry-run",
-    "changeset": "changeset",
-    "changeset:version": "changeset version",
-    "changeset:publish": "changeset publish",
     "size": "npm run build && size-limit",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
@@ -79,9 +77,9 @@
     "registry": "https://registry.npmjs.org/"
   },
   "peerDependencies": {
+    "@walletconnect/sign-client": ">=2.0.0",
     "react": ">=18.0.0",
-    "react-dom": ">=18.0.0",
-    "@walletconnect/sign-client": ">=2.0.0"
+    "react-dom": ">=18.0.0"
   },
   "peerDependenciesMeta": {
     "@walletconnect/sign-client": {
@@ -93,12 +91,14 @@
     "@stellar/stellar-sdk": "^13.0.0"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.0.0",
+    "@commitlint/cli": "^21.1.0",
+    "@commitlint/config-conventional": "^21.1.0",
     "@semantic-release/changelog": "6.0.3",
     "@semantic-release/commit-analyzer": "13.0.1",
+    "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "12.0.8",
     "@semantic-release/npm": "13.1.5",
+    "@semantic-release/release-notes-generator": "^14.1.1",
     "@size-limit/preset-small-lib": "^12.1.0",
     "@tanstack/react-query": "^5.101.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -110,8 +110,8 @@
     "@typescript-eslint/parser": "^7.0.0",
     "@walletconnect/sign-client": "^2.23.9",
     "eslint": "^8.57.0",
-    "husky": "^9.1.7",
     "eslint-plugin-react-hooks": "^4.6.2",
+    "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "lint-staged": "^15.5.0",
     "react": "^18.3.0",
