@@ -37,6 +37,16 @@ describe("useFreighter — not installed", () => {
     expect(result.current.isLoading).toBe(true);
   });
 
+  it("returns a stable object reference when the underlying state is unchanged", async () => {
+    const { result, rerender } = renderHook(() => useFreighter());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const first = result.current;
+    rerender();
+
+    expect(result.current).toBe(first);
+  });
+
   it("sets isInstalled false when Freighter is not detected", async () => {
     const { result } = renderHook(() => useFreighter());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
