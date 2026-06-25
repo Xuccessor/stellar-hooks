@@ -177,17 +177,31 @@ export function useFreighter(options?: UseFreighterOptions): UseFreighterReturn 
   const connect = useCallback(async () => {
     dispatch({ type: "SET_LOADING", payload: true });
     try {
-      const { address, error } = await requestAccess();
-      if (error) throw new Error(error.message);
-      if (!address) throw new Error("Failed to get address");
+      try {
+        const { address, error } = await requestAccess();
+        if (error) {
+          dispatch({ type: "SET_ERROR", payload: new Error(error.message || String(error)) });
+          return;
+        }
+        if (!address) {
+          dispatch({ type: "SET_ERROR", payload: new Error("Failed to get address") });
+          return;
+        }
 
-      const networkDetails = await getNetworkDetails();
-      dispatch({
-        type: "SET_CONNECTED",
-        publicKey: asPublicKey(address),
-        network: networkDetails.network ?? "",
-        networkPassphrase: networkDetails.networkPassphrase ?? "",
-      });
+        const networkDetails = await getNetworkDetails();
+        dispatch({
+          type: "SET_CONNECTED",
+          publicKey: asPublicKey(address),
+          network: networkDetails.network ?? "",
+          networkPassphrase: networkDetails.networkPassphrase ?? "",
+        });
+      } catch (innerErr) {
+        // Some browsers may throw synchronous DOMExceptions when a popup is
+        // blocked — surface this as an error state instead of letting it
+        // propagate as an unhandled rejection.
+        dispatch({ type: "SET_ERROR", payload: innerErr instanceof Error ? innerErr : new Error(String(innerErr)) });
+        return;
+      }
     } catch (err) {
       dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err : new Error(String(err)) });
     }

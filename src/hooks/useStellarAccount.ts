@@ -92,10 +92,18 @@ export function useStellarAccount(
   options: UseStellarAccountOptions = {}
 ): UseStellarAccountReturn {
   const { enabled = true, refetchInterval = 0, deduplicate = true } = options;
-  const { config } = useStellarContext();
+  const ctx = useStellarContext();
+  const { config } = ctx;
+  // Support older tests/mocks that don't include `requestCache` by falling
+  // back to a module-scoped cache. Provider instances will supply their own
+  // requestCache via context for proper scoping.
+  const moduleFallbackCache = useRef<Map<string, Promise<unknown>> | null>(null);
+  if (moduleFallbackCache.current === null) moduleFallbackCache.current = new Map();
+  const requestCache = (ctx as any).requestCache ?? moduleFallbackCache.current;
   const [state, dispatch] = useReducer(reducer, initialState);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isFetchingRef = useRef(false);
+  const activeControllerRef = useRef<AbortController | null>(null);
 
   const fetchAccount = useCallback(async () => {
     if (!publicKey) {
@@ -110,14 +118,47 @@ export function useStellarAccount(
     try {
       validatePublicKey(publicKey);
       const server = getHorizonServer(config.horizonUrl);
-      const rawAccount = await server.loadAccount(publicKey);
-      const parsed = parseAccountResponse(rawAccount);
-      dispatch({ type: "FETCH_SUCCESS", payload: parsed });
+      // AbortController per fetch cycle so we can cancel on cleanup
+      const controller = new AbortController();
+      // abort previous pending controller for this component
+      activeControllerRef.current?.abort();
+      activeControllerRef.current = controller;
+      const signal = controller.signal;
+
+      const cacheKey = `${publicKey}:${config.horizonUrl}`;
+
+      if (deduplicate) {
+        const inFlight = requestCache.get(cacheKey) as Promise<unknown> | undefined;
+        if (inFlight) {
+          try {
+            const parsed = (await inFlight) as StellarAccountData;
+            dispatch({ type: "FETCH_SUCCESS", payload: parsed });
+            return;
+          } catch (err) {
+            // fallthrough to outer catch
+          }
+        }
+      }
+
+      const fetchPromise = (async () => {
+        const rawAccount = await server.loadAccount(publicKey, { signal } as any);
+        return parseAccountResponse(rawAccount);
+      })();
+
+      if (deduplicate) requestCache.set(cacheKey, fetchPromise);
+
+      try {
+        const parsed = await fetchPromise;
+        dispatch({ type: "FETCH_SUCCESS", payload: parsed as StellarAccountData });
+      } finally {
+        if (deduplicate) requestCache.delete(cacheKey);
+      }
     } catch (err) {
-      dispatch({
-        type: "FETCH_ERROR",
-        payload: err instanceof Error ? err : new Error(String(err)),
-      });
+      // Treat aborts as a silent cancellation — don't set error state.
+      if (err instanceof Error && (err.name === "AbortError" || (err as any).code === "ABORT_ERR")) {
+        return;
+      }
+      dispatch({ type: "FETCH_ERROR", payload: err instanceof Error ? err : new Error(String(err)) });
     } finally {
       isFetchingRef.current = false;
     }
@@ -134,6 +175,7 @@ export function useStellarAccount(
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      activeControllerRef.current?.abort();
     };
   }, [enabled, publicKey, refetchInterval, fetchAccount]);
 
