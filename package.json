@@ -28,7 +28,7 @@
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "NODE_OPTIONS=\"--experimental-require-module\" vitest run",
     "test:watch": "vitest",
     "prepare": "husky",
     "prepublishOnly": "npm run build",
