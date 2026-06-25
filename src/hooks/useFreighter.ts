@@ -236,14 +236,17 @@ export function useFreighter(options?: UseFreighterOptions): UseFreighterReturn 
     [state.publicKey]
   );
 
-  return {
-    ...state,
-    networkPassphraseMismatch,
-    networkPassphraseWarning,
-    connect,
-    disconnect,
-    signTransaction: signTx,
-    signAuthEntry: signEntry,
-    signBlob,
-  };
+  return useMemo(
+    () => ({
+      ...state,
+      networkPassphraseMismatch,
+      networkPassphraseWarning,
+      connect,
+      disconnect,
+      signTransaction: signTx,
+      signAuthEntry: signEntry,
+      signBlob,
+    }),
+    [state, networkPassphraseMismatch, networkPassphraseWarning, connect, disconnect, signTx, signEntry, signBlob]
+  );
 }

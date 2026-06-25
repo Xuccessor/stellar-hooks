@@ -55,7 +55,7 @@ export function useStellarBalance(
   const asset = isAsset ? (assetOrOptions as { code: string; issuer: string }) : null;
   const accountOptions = isAsset ? options : (assetOrOptions as UseStellarAccountOptions);
 
-  const { data: account, isLoading, error, lastFetchedAt, refetch } = useStellarAccount(
+  const { data: account, isLoading, isRefetching, error, lastFetchedAt, refetch } = useStellarAccount(
     publicKey,
     accountOptions
   );
@@ -73,14 +73,18 @@ export function useStellarBalance(
     );
   }, [balances, asset]);
 
-  return {
-    balances,
-    xlmBalance,
-    assetBalance,
-    data: account,
-    isLoading,
-    error,
-    lastFetchedAt,
-    refetch,
-  };
+  return useMemo(
+    () => ({
+      balances,
+      xlmBalance,
+      assetBalance,
+      data: account,
+      isLoading,
+      isRefetching,
+      error,
+      lastFetchedAt,
+      refetch,
+    }),
+    [balances, xlmBalance, assetBalance, account, isLoading, isRefetching, error, lastFetchedAt, refetch]
+  );
 }
