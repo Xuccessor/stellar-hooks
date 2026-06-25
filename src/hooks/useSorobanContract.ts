@@ -17,7 +17,7 @@ import type { Transaction } from "@stellar/stellar-sdk";
 import * as rpc from "@stellar/stellar-sdk/rpc";
 import { useStellarContext } from "../context";
 import { useFreighter } from "./useFreighter";
-import type { ContractCallOptions, UseContractCallReturn, TransactionStatus, StellarContractId, StellarTxHash } from "../types";
+import type { ContractCallOptions, UseContractCallReturn, TransactionStatus, StellarContractId, StellarTxHash, StellarTransactionError } from "../types";
 import { unsafeAsXdrString, asTxHash, unsafeAsTxHash } from "../types";
 import { sleep, backoff, validateContractId } from "../utils";
 
@@ -27,7 +27,7 @@ interface ContractState<TResult> {
   status: TransactionStatus;
   hash: StellarTxHash | null;
   result: TResult | null;
-  error: Error | null;
+  error: StellarTransactionError | null;
 }
 
 type Action<TResult> =
@@ -37,7 +37,7 @@ type Action<TResult> =
   | { type: "SUBMITTING" }
   | { type: "POLLING" }
   | { type: "SUCCESS"; payload: TResult; hash: StellarTxHash }
-  | { type: "ERROR"; payload: Error };
+  | { type: "ERROR"; payload: StellarTransactionError };
 
 function createReducer<TResult>() {
   return function reducer(
@@ -127,7 +127,10 @@ export function useSorobanContract<TResult = unknown>(
       } = overrides || {};
 
       if (!publicKey) {
-        const err = new Error("No wallet connected. Call useFreighter().connect() first.");
+        const err: StellarTransactionError = {
+          type: "network",
+          message: "No wallet connected. Call useFreighter().connect() first.",
+        };
         dispatch({ type: "ERROR", payload: err });
         onError?.(err);
         return null;
@@ -164,7 +167,13 @@ export function useSorobanContract<TResult = unknown>(
         const simResult = await server.simulateTransaction(tx);
 
         if (rpc.Api.isSimulationError(simResult)) {
-          throw new Error(`Simulation failed: ${simResult.error}`);
+          const err: StellarTransactionError = {
+            type: "network",
+            message: `Simulation failed: ${simResult.error}`,
+          };
+          dispatch({ type: "ERROR", payload: err });
+          onError?.(err);
+          return null;
         }
 
         const preparedTx = rpc.assembleTransaction(tx, simResult).build();
@@ -187,7 +196,13 @@ export function useSorobanContract<TResult = unknown>(
         const sendResult = await server.sendTransaction(signedTx);
 
         if (sendResult.status === "ERROR") {
-          throw new Error(`Submission failed: ${JSON.stringify(sendResult.errorResult)}`);
+          const err: StellarTransactionError = {
+            type: "network",
+            message: `Submission failed: ${JSON.stringify(sendResult.errorResult)}`,
+          };
+          dispatch({ type: "ERROR", payload: err });
+          onError?.(err);
+          return null;
         }
 
         const txHash = sendResult.hash;
@@ -230,13 +245,49 @@ export function useSorobanContract<TResult = unknown>(
           }
 
           if (getResult.status === rpc.Api.GetTransactionStatus.FAILED) {
-            throw new Error(`Transaction failed: ${txHash}`);
+            const err: StellarTransactionError = {
+              type: "transaction",
+              resultCode: "unknown",
+              message: `Transaction failed on-chain`,
+            };
+            dispatch({ type: "ERROR", payload: err });
+            onError?.(err);
+            return null;
           }
         }
 
-        throw new Error(`Transaction timed out after ${timeoutSeconds}s: ${txHash}`);
+        // Polling timed out
+        const timeoutErr: StellarTransactionError = {
+          type: "timeout",
+          message: `Transaction polling timed out after ${timeoutSeconds}s. Transaction may have been dropped from the queue: ${txHash}`,
+        };
+        dispatch({ type: "ERROR", payload: timeoutErr });
+        onError?.(timeoutErr);
+        return null;
       } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
+        // Determine error type based on error message
+        let error: StellarTransactionError;
+        const message = err instanceof Error ? err.message : String(err);
+
+        if (
+          message.includes("NetworkError") ||
+          message.includes("ECONNREFUSED") ||
+          message.includes("ENOTFOUND") ||
+          message.includes("network") ||
+          message.includes("fetch") ||
+          message.includes("timeout") && !message.includes("polling")
+        ) {
+          error = {
+            type: "network",
+            message: `Network error: ${message}`,
+          };
+        } else {
+          error = {
+            type: "network",
+            message: `Unexpected error: ${message}`,
+          };
+        }
+
         dispatch({ type: "ERROR", payload: error });
         onError?.(error);
         return null;
@@ -296,7 +347,12 @@ export function useSorobanContract<TResult = unknown>(
       try {
         const sim = await simulate(overrides);
         if (rpc.Api.isSimulationError(sim)) {
-          throw new Error(`Simulation failed: ${sim.error}`);
+          const err: StellarTransactionError = {
+            type: "network",
+            message: `Simulation failed: ${sim.error}`,
+          };
+          dispatch({ type: "ERROR", payload: err });
+          return null;
         }
         
         let parsed: TResult | null = null;
@@ -308,7 +364,11 @@ export function useSorobanContract<TResult = unknown>(
         dispatch({ type: "SUCCESS", payload: parsed as TResult, hash: unsafeAsTxHash("simulation") });
         return parsed;
       } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
+        const message = err instanceof Error ? err.message : String(err);
+        const error: StellarTransactionError = {
+          type: "network",
+          message: `Query failed: ${message}`,
+        };
         dispatch({ type: "ERROR", payload: error });
         return null;
       }

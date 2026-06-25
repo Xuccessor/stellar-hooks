@@ -3,7 +3,7 @@ import { AuthFlag, Horizon, Operation, TransactionBuilder } from "@stellar/stell
 import { useStellarContext } from "../context";
 import { useTransactionCore } from "./useTransactionCore";
 import { useFreighter } from "./useFreighter";
-import type { TransactionStatus } from "../types";
+import type { TransactionStatus, StellarTransactionError } from "../types";
 import { unsafeAsXdrString } from "../types";
 
 export type AccountFlag =
@@ -18,7 +18,7 @@ export interface UseAccountFlagsOptions {
   fee?: number;
   timeoutSeconds?: number;
   onSuccess?: (hash: string) => void;
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
 }
 
 /**
@@ -45,7 +45,7 @@ export interface UseAccountFlagsReturn {
   submit: () => Promise<void>;
   status: TransactionStatus;
   hash: string | null;
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;

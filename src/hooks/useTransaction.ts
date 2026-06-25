@@ -16,7 +16,7 @@ import {
 import { useStellarContext } from "../context";
 import { useFreighter } from "./useFreighter";
 import { useTransactionCore } from "./useTransactionCore";
-import type { TransactionState, TransactionStatus } from "../types";
+import type { TransactionState, TransactionStatus, StellarTransactionError } from "../types";
 import { unsafeAsXdrString } from "../types";
 import { validatePublicKey } from "../utils";
 
@@ -46,7 +46,7 @@ export interface UseTransactionOptions {
   /** Callback fired when the transaction is successfully confirmed on-chain. */
   onSuccess?: (hash: string) => void;
   /** Callback fired when an error occurs at any stage. */
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
 }
 
 // ─── Return type ──────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ export interface UseTransactionReturn {
   /** Transaction hash once the transaction is confirmed on-chain. */
   hash: TransactionState["hash"];
   /** Error object if the transaction failed at any stage. */
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;

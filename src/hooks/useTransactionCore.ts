@@ -11,7 +11,7 @@ import { useCallback, useReducer } from "react";
 import { TransactionBuilder, Horizon } from "@stellar/stellar-sdk";
 import * as rpc from "@stellar/stellar-sdk/rpc";
 import { useStellarContext } from "../context";
-import type { TransactionState, TransactionStatus, StellarXdrString, StellarTxHash } from "../types";
+import type { TransactionState, TransactionStatus, StellarXdrString, StellarTxHash, StellarTransactionError } from "../types";
 import { asTxHash } from "../types";
 import { sleep, backoff } from "../utils";
 
@@ -25,7 +25,7 @@ export interface UseTransactionCoreOptions {
   /** Callback fired when the transaction is successfully confirmed. */
   onSuccess?: (hash: string) => void;
   /** Callback fired when the transaction fails or an error occurs. */
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
 }
 
 export interface UseTransactionCoreReturn extends TransactionState {
@@ -39,7 +39,7 @@ type Action =
   | { type: "RESET" }
   | { type: "STATUS"; payload: TransactionStatus }
   | { type: "SUCCESS"; hash: StellarTxHash }
-  | { type: "ERROR"; payload: Error };
+  | { type: "ERROR"; payload: StellarTransactionError };
 
 function reducer(state: TransactionState, action: Action): TransactionState {
   switch (action.type) {
@@ -87,7 +87,13 @@ export function useTransactionCore(
           const sendResult = await server.sendTransaction(tx);
 
           if (sendResult.status === "ERROR") {
-            throw new Error(`Submission error: ${JSON.stringify(sendResult.errorResult)}`);
+            const error: StellarTransactionError = {
+              type: "network",
+              message: `Submission failed: ${JSON.stringify(sendResult.errorResult)}`,
+            };
+            dispatch({ type: "ERROR", payload: error });
+            onError?.(error);
+            return;
           }
 
           const txHash = sendResult.hash;
@@ -109,11 +115,23 @@ export function useTransactionCore(
             }
 
             if (getResult.status === rpc.Api.GetTransactionStatus.FAILED) {
-              throw new Error(`Transaction failed on-chain: ${txHash}`);
+              const error: StellarTransactionError = {
+                type: "transaction",
+                resultCode: "unknown",
+                message: `Transaction failed on-chain`,
+              };
+              dispatch({ type: "ERROR", payload: error });
+              onError?.(error);
+              return;
             }
           }
 
-          throw new Error(`Transaction polling timed out: ${txHash}`);
+          const timeoutError: StellarTransactionError = {
+            type: "timeout",
+            message: `Transaction polling timed out after ${timeoutSeconds}s: ${txHash}`,
+          };
+          dispatch({ type: "ERROR", payload: timeoutError });
+          onError?.(timeoutError);
         } else {
           const server = new Horizon.Server(config.horizonUrl);
           const tx = TransactionBuilder.fromXDR(signedXdr, config.networkPassphrase);
@@ -123,7 +141,28 @@ export function useTransactionCore(
           onSuccess?.(result.hash);
         }
       } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err));
+        // Determine if this is a network error or other error
+        let error: StellarTransactionError;
+        const message = err instanceof Error ? err.message : String(err);
+
+        if (
+          message.includes("NetworkError") ||
+          message.includes("ECONNREFUSED") ||
+          message.includes("ENOTFOUND") ||
+          message.includes("timeout") ||
+          message.includes("network")
+        ) {
+          error = {
+            type: "network",
+            message: `Network error during transaction: ${message}`,
+          };
+        } else {
+          error = {
+            type: "network",
+            message: `Unexpected error: ${message}`,
+          };
+        }
+
         dispatch({ type: "ERROR", payload: error });
         onError?.(error);
       }

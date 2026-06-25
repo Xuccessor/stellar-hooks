@@ -7,6 +7,7 @@
 import { useState, useCallback } from "react";
 import { Horizon, TransactionBuilder, Operation } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
+import type { StellarTransactionError } from "../types";
 
 export interface UseCreateAccountOptions {
   /** Optional Friendbot URL. If not provided, it attempts to infer from the network. */
@@ -25,7 +26,7 @@ export interface UseCreateAccountReturn {
     baseFee?: string
   ) => import("@stellar/stellar-sdk").Transaction;
   isLoading: boolean;
-  error: Error | null;
+  error: StellarTransactionError | null;
 }
 
 /**
@@ -55,7 +56,7 @@ export interface UseCreateAccountReturn {
 export function useCreateAccount(options: UseCreateAccountOptions = {}): UseCreateAccountReturn {
   const { config, network } = useStellarContext();
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<StellarTransactionError | null>(null);
 
   const fundWithFriendbot = useCallback(
     async (publicKey: string) => {
@@ -77,12 +78,24 @@ export function useCreateAccount(options: UseCreateAccountOptions = {}): UseCrea
         const response = await fetch(`${url}?addr=${encodeURIComponent(publicKey)}`);
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
-          throw new Error(
-            errorData?.detail || `Friendbot request failed with status ${response.status}`
-          );
+          const err: StellarTransactionError = {
+            type: "network",
+            message: errorData?.detail || `Friendbot request failed with status ${response.status}`,
+          };
+          setError(err);
+          throw err;
         }
       } catch (err) {
-        const parsedError = err instanceof Error ? err : new Error(String(err));
+        let parsedError: StellarTransactionError;
+        if (typeof err === 'object' && err !== null && 'type' in err) {
+          parsedError = err as StellarTransactionError;
+        } else {
+          const message = err instanceof Error ? err.message : String(err);
+          parsedError = {
+            type: "network",
+            message,
+          };
+        }
         setError(parsedError);
         throw parsedError;
       } finally {

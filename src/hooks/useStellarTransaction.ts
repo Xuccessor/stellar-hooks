@@ -3,7 +3,7 @@ import { Horizon, Transaction, TransactionBuilder, xdr } from "@stellar/stellar-
 import { useStellarContext } from "../context";
 import { useFreighter } from "./useFreighter";
 import { useTransactionCore } from "./useTransactionCore";
-import { unsafeAsXdrString, type TransactionStatus } from "../types";
+import { unsafeAsXdrString, type TransactionStatus, type StellarTransactionError } from "../types";
 import { validatePublicKey } from "../utils";
 
 export interface UseStellarTransactionOptions {
@@ -17,7 +17,7 @@ export interface UseStellarTransactionOptions {
     sponsor?: string;
   };
   onSuccess?: (hash: string) => void;
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
 }
 
 export interface UseStellarTransactionReturn {
@@ -27,7 +27,7 @@ export interface UseStellarTransactionReturn {
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;
-  error: Error | null;
+  error: StellarTransactionError | null;
   reset: () => void;
 }
 

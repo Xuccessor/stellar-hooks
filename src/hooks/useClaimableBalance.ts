@@ -16,7 +16,7 @@ import {
 import { useStellarContext } from "../context";
 import { useTransactionCore } from "./useTransactionCore";
 import { useFreighter } from "./useFreighter";
-import { unsafeAsXdrString, type TransactionStatus } from "../types";
+import { unsafeAsXdrString, type TransactionStatus, type StellarTransactionError } from "../types";
 import { validatePublicKey } from "../utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ export interface UseClaimBalanceOptions {
   /** Callback fired when the transaction is successfully confirmed. */
   onSuccess?: (hash: string) => void;
   /** Callback fired when the transaction fails or an error occurs. */
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
 }
 
 /** Options for {@link useCreateClaimableBalance}. */
@@ -116,14 +116,14 @@ export interface UseClaimableBalancesReturn extends ClaimableBalancesState {
  */
 export interface UseClaimBalanceOptions {
   onSuccess?: (hash: string) => void;
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
 }
 
 export interface UseClaimBalanceReturn {
   claim: (balanceId: string) => Promise<void>;
   status: TransactionStatus;
   hash: string | null;
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;
@@ -323,7 +323,7 @@ export interface UseCreateClaimableBalanceReturn {
   create: (params: CreateClaimableBalanceParams) => Promise<void>;
   status: TransactionStatus;
   hash: string | null;
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;

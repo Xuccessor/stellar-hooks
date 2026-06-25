@@ -15,7 +15,7 @@ import {
 import { useStellarContext } from "../context";
 import { useTransactionCore } from "./useTransactionCore";
 import { useFreighter } from "./useFreighter";
-import type { TransactionStatus } from "../types";
+import type { TransactionStatus, StellarTransactionError } from "../types";
 import { unsafeAsXdrString } from "../types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ export interface UseTrustlineOptions {
   /** Callback fired when the transaction is successfully confirmed. */
   onSuccess?: (hash: string) => void;
   /** Callback fired when the transaction fails or an error occurs. */
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
 }
 
 /**
@@ -66,7 +66,7 @@ export interface UseTrustlineReturn {
   submit: () => Promise<void>;
   status: TransactionStatus;
   hash: string | null;
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;

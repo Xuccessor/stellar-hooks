@@ -3,7 +3,7 @@ import { Horizon, Memo, TransactionBuilder, Operation } from "@stellar/stellar-s
 import { useStellarContext } from "../context";
 import { useFreighter } from "./useFreighter";
 import { useTransactionCore } from "./useTransactionCore";
-import type { TransactionStatus } from "../types";
+import type { TransactionStatus, StellarTransactionError } from "../types";
 import { unsafeAsXdrString } from "../types";
 
 export interface BuildOptions {
@@ -15,7 +15,7 @@ export interface UseMultiSigOptions {
   fee?: number;
   timeoutSeconds?: number;
   onSuccess?: (hash: string) => void;
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
 }
 
 export interface UseMultiSigReturn {
@@ -27,7 +27,7 @@ export interface UseMultiSigReturn {
   unsignedXdr: string | null;
   hash: string | null;
   signatureCount: number;
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;

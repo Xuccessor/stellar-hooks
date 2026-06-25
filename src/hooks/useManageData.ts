@@ -10,7 +10,7 @@ import { Horizon, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
 import { useTransactionCore } from "./useTransactionCore";
 import { useFreighter } from "./useFreighter";
-import { unsafeAsXdrString, type TransactionStatus } from "../types";
+import { unsafeAsXdrString, type TransactionStatus, type StellarTransactionError } from "../types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -22,7 +22,7 @@ export interface UseManageDataOptions {
   /** Callback fired when the transaction is successfully confirmed. */
   onSuccess?: (hash: string) => void;
   /** Callback fired when the transaction fails or an error occurs. */
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
 }
 
 /**
@@ -57,7 +57,7 @@ export interface UseManageDataReturn {
   remove: (name: string) => Promise<void>;
   status: TransactionStatus;
   hash: string | null;
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;

@@ -260,6 +260,39 @@ export interface SignTransactionOptions {
 // ─── Transactions ─────────────────────────────────────────────────────────────
 
 /**
+ * Distinguishes between different categories of transaction errors.
+ * Consumers can now differentiate network failures from on-chain transaction failures.
+ *
+ * @example
+ * ```ts
+ * const { error } = useTransaction(...);
+ * if (error?.type === 'network') {
+ *   console.error("Network issue:", error.message);
+ * } else if (error?.type === 'transaction') {
+ *   console.error("On-chain failure:", error.resultCode);
+ * }
+ * ```
+ */
+export type StellarTransactionError =
+  | {
+      /** Request never reached the network */
+      type: 'network';
+      message: string;
+    }
+  | {
+      /** Transaction submitted but failed on-chain */
+      type: 'transaction';
+      /** Stellar result code (e.g., "op_underfunded", "tx_bad_seq") */
+      resultCode: string;
+      message: string;
+    }
+  | {
+      /** Operation timed out before completing */
+      type: 'timeout';
+      message: string;
+    };
+
+/**
  * Lifecycle stages of a Stellar transaction submission.
  *
  * @example
@@ -285,14 +318,15 @@ export type TransactionStatus =
  * ```ts
  * const { status, hash, result, error, isLoading, isSuccess, isError } = useSorobanContract(...);
  * if (isSuccess) console.log("tx hash:", hash);
- * if (isError)   console.error(error?.message);
+ * if (isError && error?.type === 'network') console.error("Network error");
+ * if (isError && error?.type === 'transaction') console.error("On-chain failure:", error.resultCode);
  * ```
  */
 export interface TransactionState<TResult = unknown> {
   status: TransactionStatus;
   hash: StellarTxHash | null;
   result: TResult | null;
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;
@@ -314,7 +348,7 @@ export interface ContractCallOptions<TResult = unknown> {
   /** Callback fired when the transaction is successfully confirmed. */
   onSuccess?: (result: TResult) => void;
   /** Callback fired when the transaction fails or an error occurs. */
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
   /**
    * Optional function to parse the raw xdr.ScVal result to your desired TResult type.
    * If not provided, the raw xdr.ScVal is returned (or tx hash as fallback).
