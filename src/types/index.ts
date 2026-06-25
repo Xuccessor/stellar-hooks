@@ -30,8 +30,12 @@ export type StellarNetwork = "mainnet" | "testnet" | "futurenet" | "custom";
  * console.log(config.horizonUrl); // "https://horizon-testnet.stellar.org"
  * ```
  */
-export interface NetworkConfig {
-  network: StellarNetwork;
+/**
+ * Network configuration for a non-custom (preset) network.
+ * This is kept separate so `custom` configs remain discriminated.
+ */
+export interface PresetNetworkConfig {
+  network: Exclude<StellarNetwork, "custom">;
   /** Horizon REST API endpoint */
   horizonUrl: string;
   /** Soroban RPC endpoint */
@@ -39,6 +43,12 @@ export interface NetworkConfig {
   /** Network passphrase */
   networkPassphrase: string;
 }
+
+/**
+ * Union of preset or custom network configuration. When `network === "custom"`
+ * the `CustomNetworkConfig` shape is enforced by the discriminant.
+ */
+export type NetworkConfig = PresetNetworkConfig | CustomNetworkConfig;
 
 import {
   type StellarPublicKey,
@@ -364,6 +374,8 @@ export interface StellarProviderProps {
 export interface StellarContextValue {
   config: NetworkConfig;
   network: StellarNetwork;
+  /** Provider-scoped in-memory map for deduplicating in-flight requests. */
+  requestCache: Map<string, Promise<unknown>>;
 }
 
 // ─── Stellar Wallets Kit ──────────────────────────────────────────────────────
