@@ -386,6 +386,15 @@ export function useSorobanContract<TResult = unknown>(
     call,
     simulate,
     query,
+    /**
+     * Dry-run / simulate-only façade. Functionally identical to `query`
+     * (both perform a `simulateTransaction` RPC call and parse the retval,
+     * neither signs nor submits anything); kept as a separate method name
+     * so call sites that conceptually PREVIEW a transaction — gas
+     * estimation, form validation, "Confirm" screens with computed effects
+     * — read more clearly. See {@link UseContractCallReturn}.
+     */
+    dryRun: query,
     reset,
   };
 }

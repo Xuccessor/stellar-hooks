@@ -1,6 +1,6 @@
 /**
  * @file useStellarAccount.ts
- * @description Hook for fetching Stellar account data from Horizon.
+ * @description Hook for fetching a single Stellar account from Horizon.
  * @package stellar-hooks
  * @license MIT
  */
@@ -47,7 +47,7 @@ const initialState: AccountState = {
   lastFetchedAt: null,
 };
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface UseStellarAccountOptions {
   /** Whether the query is enabled. Defaults to true. */
@@ -79,15 +79,25 @@ export interface UseStellarAccountReturn {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
- * Fetch and optionally poll a Stellar account from Horizon.
+ * Fetch and optionally poll a single Stellar account from Horizon.
  *
- * @param {StellarPublicKey | null | undefined} publicKey - The public key of the account to fetch.
- * @param {UseStellarAccountOptions} [options={}] - Configuration options.
- * @returns {UseStellarAccountReturn}
+ * For multi-account lookups (e.g. fetching several signers or a multisig roster
+ * in parallel), see {@link useStellarAccounts}.
+ *
+ * @param publicKey  Stellar public key (G…) to look up. Pass `null`/`undefined` to suspend the fetch.
+ * @param options    Configuration (enabled, refetchInterval, deduplicate).
+ *
+ * @example
+ * ```tsx
+ * const { account, isLoading, error, refetch, lastFetchedAt } = useStellarAccount(
+ *   "GAAZI4...",
+ *   { refetchInterval: 10_000 },
+ * );
+ * ```
  */
 export function useStellarAccount(
   publicKey: StellarPublicKey | null | undefined,
-  options: UseStellarAccountOptions = {}
+  options: UseStellarAccountOptions = {},
 ): UseStellarAccountReturn {
   const { enabled = true, refetchInterval = 0, deduplicate = true } = options;
   const ctx = useStellarContext();

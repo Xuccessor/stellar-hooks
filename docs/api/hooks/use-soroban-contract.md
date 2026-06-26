@@ -37,8 +37,9 @@ import { useSorobanContract } from "stellar-hooks";
 | Property | Type | Description |
 |---|---|---|---|
 | `call` | `(overrides?) => Promise<T \| null>` | Execute the contract call |
-| `query` | `(overrides?) => Promise<T \| null>` | Simulate-only query (read without signing) |
-| `simulate` | `(overrides?) => Promise<SimulateResponse>` | Raw simulation for cost estimation |
+| `query` | `(overrides?) => Promise<T \| null>` | Simulate-only query (read without signing). Updates `result` / `status`. |
+| `dryRun` | `(overrides?) => Promise<T \| null>` | Simulate-only "dry-run" facade. Functionally identical to `query`; named separately for call sites whose intent is to PREVIEW a would-be transaction (gas estimation, form validation, Confirm screens with computed effects) rather than to read state. |
+| `simulate` | `(overrides?) => Promise<SimulateResponse>` | Raw simulation for cost estimation; does not update hook state. |
 | `status` | `TransactionStatus` | Current status |
 | `result` | `T \| null` | Parsed return value on success |
 | `hash` | `string \| null` | Transaction hash |
@@ -50,7 +51,8 @@ import { useSorobanContract } from "stellar-hooks";
 
 ### `TransactionStatus`
 
-`"idle"` → `"building"` → `"signing"` → `"submitting"` → `"polling"` → `"success"` or `"error"`
+- **Full lifecycle (`call`):** `"idle"` → `"building"` → `"signing"` → `"submitting"` → `"polling"` → `"success"` or `"error"`.
+- **Read-only (`query` / `dryRun`):** `"idle"` → `"building"` → `"success"` or `"error"`. Both skip the signing/submitting/polling phases entirely.
 
 ## Basic Example
 
@@ -84,7 +86,7 @@ function IncrementButton() {
 
 ## Query Example (Read-Only)
 
-Use `query()` to simulate without signing or submitting:
+Use `query()` to simulate without signing or submitting. The hook's `result` and `status` are updated as if you'd made a real call, but no transaction is ever signed or broadcast.
 
 ```tsx
 const { query, result } = useSorobanContract(contractId, {
@@ -95,6 +97,28 @@ const { query, result } = useSorobanContract(contractId, {
 async function handleQuery() {
   const balance = await query();
   console.log("Balance:", balance);
+}
+```
+
+## Dry-Run Example (Preview a Write)
+
+`dryRun` does exactly the same work as `query` — both call `simulateTransaction` under the hood and parse the retval — but the name reads better at call sites where the *intent* is to preview a would-be write (e.g. estimating gas, validating a form, populating a Confirm screen). Pick the name that best describes what your UI is doing.
+
+```tsx
+import { nativeToScVal } from "@stellar/stellar-sdk";
+import { useSorobanContract } from "stellar-hooks";
+
+const { dryRun, result } = useSorobanContract(contractId, {
+  method: "transfer",
+  args: [nativeToScVal(recipientAddr), nativeToScVal(amount)],
+  parseResult: (scVal) => /* parse the retval */ null,
+});
+
+async function previewTransfer() {
+  // No signing, no submission — just a Soroban simulateTransaction.
+  const preview = await dryRun();
+  if (preview == null) return; // simulation failed; `error` is populated
+  console.log("Simulated fee / effects:", preview);
 }
 ```
 

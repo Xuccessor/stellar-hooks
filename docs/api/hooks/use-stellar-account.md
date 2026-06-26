@@ -101,6 +101,56 @@ const { account } = useStellarAccount(publicKey, {
 });
 ```
 
+## Multi-Account Fetching
+
+When your UI needs data for several accounts at once — a multisig roster, a list of recent signers, an account picker — calling `useStellarAccount` once per key in a React tree forces a serial waterfall and triggers N independent polling timers. Use `useStellarAccounts(publicKeys[])` instead: it issues a single batched fetch per tick and returns a `Record<publicKey, StellarAccountData>` map with per-key error capture.
+
+```tsx
+import { useStellarAccounts } from "stellar-hooks";
+
+function MultisigRoster({ signers }: { signers: string[] }) {
+  const { accounts, errors, isLoading, isError, refetch } = useStellarAccounts(
+    signers,
+    { refetchInterval: 10_000 },
+  );
+
+  if (isLoading) return <p>Loading roster…</p>;
+  if (isError)
+    return (
+      <ErrorBanner
+        message="One or more signers could not be loaded"
+        onRetry={refetch}
+      />
+    );
+
+  return (
+    <ul>
+      {signers.map((pk) => (
+        <li key={pk}>
+          <code>{pk}</code>
+          {errors[pk] ? (
+            <span style={{ color: "red" }}> — error: {errors[pk]?.message}</span>
+          ) : (
+            <span> — seq #{accounts[pk]?.sequence}</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Key behaviours:
+
+- **Parallel RPC**: `Promise.all` over distinct `loadAccount` calls — no serial waterfall.
+- **Per-key errors**: a missing/invalid account is captured in `errors[pk]` without poisoning the rest of the batch.
+- **Idempotent keys**: duplicate entries in the input are deduped before the RPC call.
+- **Stable refetch identity**: `refetch()` reissues the whole batch.
+- **Single polling timer**: `refetchInterval` ticks fire one batch (not N independent timers).
+
+`enabled` short-circuits all RPC calls. Pass `null`/`undefined` entries in the input array — they will be skipped.
+
 ## See Also
 
-- [useStellarBalance](/api/hooks/use-stellar-balance) — Convenience wrapper for balance queries
+- [useStellarBalance](/api/hooks/use-stellar-balance) — Convenience wrapper for a single balance query
+- `useStellarAccounts` — Multi-account parallel fetch (this page's Multi-Account section above)

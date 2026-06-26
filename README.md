@@ -71,6 +71,7 @@ Every hook listed below is implemented and exported from the package entry point
 | Hook | Description |
 |------|-------------|
 | [`useFreighter()`](#usefreighter) ↓ | Connect to the [Freighter](https://freighter.app) extension (`@stellar/freighter-api` v6); sign transactions, auth entries, and messages. |
+| `useFreighterAccounts()` | Track previously-seen Freighter addresses in `localStorage`; drive the permission dialog to switch between them. |
 | `useWalletsKit()` | Multi-wallet adapter via [`@creit-tech/stellar-wallets-kit`](https://github.com/Creit-Tech/Stellar-Wallets-Kit) (Freighter, xBull, Albedo, Lobstr, WalletConnect, …). |
 | `useWalletConnect()` | WalletConnect v2 adapter for Stellar / Freighter Mobile. |
 | [`useNetwork()`](#usenetwork) ↓ | Read the active network configuration and switch networks at runtime. |
@@ -80,6 +81,7 @@ Every hook listed below is implemented and exported from the package entry point
 | Hook | Description |
 |------|-------------|
 | [`useStellarAccount()`](#usestellaraccountpublickey-options) ↓ | Fetch (and optionally poll) a full account from Horizon. |
+| `useStellarAccounts()` | Fetch and poll multiple accounts in parallel (no serial waterfall). |
 | [`useStellarBalance()`](#usestellarbalancepublickey-options) ↓ | XLM and per-asset balances (wrapper around `useStellarAccount`). |
 | `useSorobanTokenBalance()` | Read SAC (Stellar Asset Contract) token balances via Soroban RPC. |
 | [`useLedgerEntry()`](#useledgerentryledgerkey-options) ↓ | Read a raw Soroban ledger entry by its `xdr.LedgerKey`. |
@@ -124,11 +126,13 @@ Connect to and interact with the [Freighter](https://freighter.app) browser exte
 
 ```ts
 const {
-  isInstalled,       // boolean — is Freighter installed?
-  isConnected,       // boolean — has the user granted access?
-  publicKey,         // string | null
-  network,           // string | null  e.g. "TESTNET"
-  networkPassphrase, // string | null
+  isInstalled,             // boolean — is Freighter installed?
+  isConnected,             // boolean — has the user granted access?
+  publicKey,               // string | null
+  network,                 // string | null  e.g. "TESTNET"
+  networkPassphrase,       // string | null
+  networkPassphraseMismatch, // boolean — true when wallet network differs from `expectedNetworkPassphrase` (or the <StellarProvider> network)
+  networkPassphraseWarning,  // string | null — actionable warning text on mismatch; null otherwise
   isLoading,
   error,
 
@@ -139,6 +143,21 @@ const {
   signBlob,          // (blob: string, opts?) => Promise<string>  — wraps signMessage
 } = useFreighter();
 ```
+
+#### Network mismatch detection
+
+If the wallet is on a different Stellar network than your dApp expects, signing would silently target the wrong ledger. The hook accepts an optional `expectedNetworkPassphrase`:
+
+```ts
+const { networkPassphraseMismatch, networkPassphraseWarning } = useFreighter({
+  expectedNetworkPassphrase: "Test SDF Network ; September 2015",
+});
+
+// Or, if your app is wrapped in <StellarProvider network="testnet">, the
+// expected passphrase is taken from the provider automatically.
+```
+
+Render `networkPassphraseWarning` to surface the issue, or gate signing behind an acknowledgement. See the [API reference](./docs/api/hooks/use-freighter.md) for a full example.
 
 ---
 
@@ -234,6 +253,26 @@ const {
   refetch,
 } = useStellarBalance("G...", { code: "USDC", issuer: "G..." });
 ```
+
+### `useStellarAccounts(publicKeys[], options?)`
+
+Fetch and poll multiple Stellar accounts in parallel — useful for multisig rosters, account pickers, or any list view. Issues one batched `Promise.all(loadAccount)` per tick and returns a per-key map.
+
+```ts
+const {
+  accounts,      // Record<publicKey, StellarAccountData | null>
+  errors,        // Record<publicKey, Error | null>
+  isLoading,
+  isError,
+  error,         // First per-key error across the batch, or null
+  refetch,
+  lastFetchedAt,
+} = useStellarAccounts([signerA, signerB, signerC], { refetchInterval: 10_000 });
+```
+
+- `null`/`undefined` entries in the input are skipped.
+- Duplicate keys are deduplicated before the RPC call.
+- A single failing account does NOT poison the rest of the batch — `errors[pk]` carries per-key errors.
 
 ---
 

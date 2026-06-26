@@ -434,6 +434,20 @@ export interface UseContractCallReturn<TResult = unknown>
     overrides?: Partial<Omit<ContractCallOptions<TResult>, "contractId">>
   ) => Promise<TResult | null>;
   /**
+   * Dry-run / simulate-only façade for `call`. Functionally identical to
+   * `query` (both perform a `simulateTransaction` RPC call and parse the
+   * retval; neither signs nor submits anything); kept under a separate
+   * name so PREVIEW call sites — gas estimation, form validation, and
+   * "Confirm" screens showing computed effects — read more clearly.
+   *
+   * Equivalent to `query`; prefer `dryRun` when the intent is to PREVIEW
+   * a transaction and `query` when reading contract state is the
+   * everyday path.
+   */
+  dryRun: (
+    overrides?: Partial<Omit<ContractCallOptions<TResult>, "contractId">>
+  ) => Promise<TResult | null>;
+  /**
    * Perform an isolated simulation of the contract call.
    * Returns the raw RPC simulation response including footprint, resource usage, and results.
    * Does not sign or submit a transaction.

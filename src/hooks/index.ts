@@ -1,6 +1,12 @@
 export { useNetwork } from "./useNetwork";
 export { useStellarAccount } from "./useStellarAccount";
 export type { UseStellarAccountOptions, UseStellarAccountReturn } from "./useStellarAccount";
+
+export { useStellarAccounts } from "./useStellarAccounts";
+export type {
+  UseStellarAccountsOptions,
+  UseStellarAccountsReturn,
+} from "./useStellarAccounts";
 export { useStellarBalance } from "./useStellarBalance";
 export type { UseStellarBalanceReturn } from "./useStellarBalance";
 
@@ -11,6 +17,12 @@ export { useEffects } from "./useEffects";
 export type { UseEffectsOptions, UseEffectsReturn } from "./useEffects";
 
 export { useFreighter } from "./useFreighter";
+
+export { useFreighterAccounts } from "./useFreighterAccounts";
+export type {
+  UseFreighterAccountsOptions,
+  UseFreighterAccountsReturn,
+} from "./useFreighterAccounts";
 
 
 export { useStellarToml } from "./useStellarToml";
