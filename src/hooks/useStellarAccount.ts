@@ -100,6 +100,43 @@ export function useStellarAccount(
   options: UseStellarAccountOptions = {},
 ): UseStellarAccountReturn {
   const { enabled = true, refetchInterval = 0, deduplicate = true } = options;
+  const { config } = useStellarContext();
+
+  const fetchAccount = useCallback(async (): Promise<StellarAccountData | null> => {
+    if (!publicKey) return null;
+    validatePublicKey(publicKey);
+    const server = getHorizonServer(config.horizonUrl);
+    const rawAccount = await server.loadAccount(publicKey);
+    return parseAccountResponse(rawAccount);
+  }, [publicKey, config.horizonUrl]);
+
+  const state = useStellarQuery<StellarAccountData | null>(fetchAccount, {
+    enabled: enabled && Boolean(publicKey),
+    refetchInterval,
+    deduplicate,
+    initialData: null,
+  });
+
+  return useMemo(
+    () => ({
+      account: state.data,
+      data: state.data,
+      isLoading: state.isLoading,
+      isRefetching: state.isRefetching,
+      error: state.error,
+      lastFetchedAt: state.lastFetchedAt,
+      refetch: state.refetch,
+    }),
+    [
+      state.data,
+      state.isLoading,
+      state.isRefetching,
+      state.error,
+      state.lastFetchedAt,
+      state.refetch,
+    ],
+  );
+}
   const ctx = useStellarContext();
   const { config } = ctx;
   // Support older tests/mocks that don't include `requestCache` by falling

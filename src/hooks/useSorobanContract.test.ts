@@ -280,6 +280,55 @@ describe("useSorobanContract — status transitions", () => {
     expect(result.current.error?.message).toContain("failed on-chain");
   });
 
+  it("performs a dryRun (simulation-only) without signing — alias of query with explicit naming", async () => {
+    mockSimulateTransaction.mockResolvedValue({
+      result: { retval: xdr.ScVal.scvSymbol("dry_ok") },
+      latestLedger: 100,
+    });
+
+    const { result } = renderHook(() =>
+      useSorobanContract("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4" as any, {
+        method: "get_val",
+        parseResult: () => "parsed_val",
+      })
+    );
+
+    await act(async () => {
+      const dryRes = await result.current.dryRun();
+      expect(dryRes).toBe("parsed_val");
+    });
+
+    // Lifecycle lands on success — not building/signing/submitting.
+    expect(result.current.status).toBe("success");
+
+    // dryRun must NEVER touch the signing or submission surface.
+    expect(mockSignTransaction).not.toHaveBeenCalled();
+    expect(mockSendTransaction).not.toHaveBeenCalled();
+
+    // Sanity: dryRun and query are documented as the same underlying
+    // function. If a future refactor ever diverges them, this test
+    // surfaces the change instead of silently keeping both in sync.
+    expect(result.current.dryRun).toBe(result.current.query);
+  });
+
+  it("propagates simulation failures from dryRun into the error state", async () => {
+    mockSimulateTransaction.mockResolvedValue({ error: "contract revert: not allowed" });
+
+    const { result } = renderHook(() =>
+      useSorobanContract("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4" as any, { method: "increment" })
+    );
+
+    await act(async () => {
+      const dryRes = await result.current.dryRun();
+      expect(dryRes).toBeNull();
+    });
+
+    expect(result.current.status).toBe("error");
+    expect(result.current.error?.message).toMatch(/Simulation failed/);
+    expect(result.current.result).toBeNull();
+  });
+
+  it("resets state correctly", async () => {
   it("reset() clears all state back to idle", async () => {
     mockSimulateTransaction.mockResolvedValue({
       error: "boom",
