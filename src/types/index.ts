@@ -449,8 +449,10 @@ export interface UseContractCallReturn<TResult = unknown>
 export interface LedgerEntryState {
   /** The raw ledger entry result from Soroban RPC, or `null` if not yet fetched or not found. */
   data: rpc.Api.LedgerEntryResult | null;
-  /** `true` while the ledger entry is being fetched from Soroban RPC. */
+  /** `true` while the initial ledger entry fetch is in flight. */
   isLoading: boolean;
+  /** `true` while a manual refetch (or polling tick) is in flight after the first load. */
+  isRefetching: boolean;
   /** Most recent fetch error, or `null`. */
   error: Error | null;
   /** Manually trigger a re-fetch of the ledger entry. */

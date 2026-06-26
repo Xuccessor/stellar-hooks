@@ -27,6 +27,13 @@ export type { UseTransactionOptions, UseTransactionReturn } from "./useTransacti
 export { useLedgerEntry } from "./useLedgerEntry";
 export type { UseLedgerEntryOptions } from "./useLedgerEntry";
 
+export { useContractStorage } from "./useContractStorage";
+export type {
+  ContractStorageDurability,
+  UseContractStorageOptions,
+  UseContractStorageReturn,
+} from "./useContractStorage";
+
 export { usePayment } from "./usePayment";
 export type {
   PaymentAsset,
