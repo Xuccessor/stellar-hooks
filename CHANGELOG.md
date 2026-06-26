@@ -1,5 +1,7 @@
 # Changelog
 
+For breaking changes and migration steps, see [MIGRATION.md](MIGRATION.md).
+
 ## 0.1.0 — Initial release
 
 ### Added

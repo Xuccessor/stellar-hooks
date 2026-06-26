@@ -35,12 +35,13 @@ export type StellarNetwork = "mainnet" | "testnet" | "futurenet" | "custom";
  * This is kept separate so `custom` configs remain discriminated.
  */
 export interface PresetNetworkConfig {
+  /** The preset network identifier (`"mainnet"`, `"testnet"`, or `"futurenet"`). */
   network: Exclude<StellarNetwork, "custom">;
-  /** Horizon REST API endpoint */
+  /** Horizon REST API endpoint URL for this network. */
   horizonUrl: string;
-  /** Soroban RPC endpoint */
+  /** Soroban RPC endpoint URL for contract simulation and submission. */
   sorobanRpcUrl: string;
-  /** Network passphrase */
+  /** Stellar network passphrase used when signing transactions. */
   networkPassphrase: string;
 }
 
@@ -161,23 +162,42 @@ export const NETWORK_CONFIGS: Record<Exclude<StellarNetwork, "custom">, NetworkC
  * ```
  */
 export interface StellarAccountData {
+  /** Stellar public key (G...) that identifies this account. */
   accountId: StellarPublicKey;
+  /** All balances held by this account (native XLM + issued assets). */
   balances: StellarBalance[];
+  /** Current sequence number, incremented with each transaction. */
   sequence: string;
+  /** Number of sub-entries (trustlines, offers, signers, data entries) consuming base reserves. */
   subentryCount: number;
+  /** Number of entries this account is being sponsored for by other accounts. */
   numSponsored: number;
+  /** Number of entries this account is sponsoring for other accounts. */
   numSponsoring: number;
+  /** Operation weight thresholds required for low, medium, and high security operations. */
   thresholds: {
+    /** Weight required for low-security operations (e.g. AllowTrust). */
     lowThreshold: number;
+    /** Weight required for medium-security operations (e.g. Payment). */
     medThreshold: number;
+    /** Weight required for high-security operations (e.g. SetOptions, AccountMerge). */
     highThreshold: number;
   };
+  /** Authorization flags controlling how this account's issued assets behave. */
   flags: {
+    /** When true, the issuer must approve each trustline before the holder can receive the asset. */
     authRequired: boolean;
+    /** When true, the issuer can revoke existing trustlines to freeze assets. */
     authRevocable: boolean;
+    /** When true, none of the authorization flags can ever be changed. */
     authImmutable: boolean;
+    /** When true, the issuer can claw back (burn) the asset from any holder's account. */
     authClawbackEnabled: boolean;
   };
+  /**
+   * The original, unprocessed Horizon API response.
+   * Use this to access any Horizon fields not mapped above (e.g. `data`, `signers`, `_links`).
+   */
   raw: Horizon.AccountResponse;
 }
 
@@ -195,15 +215,23 @@ export interface StellarAccountData {
  * ```
  */
 export interface StellarBalance {
+  /** Horizon asset type string (e.g. `"native"`, `"credit_alphanum4"`, `"credit_alphanum12"`). */
   assetType: string;
+  /** Asset code (e.g. `"USDC"`). Undefined for native XLM. */
   assetCode?: string;
+  /** Issuer public key (G...) for non-native assets. Undefined for native XLM. */
   assetIssuer?: StellarAssetIssuer;
+  /** Balance as a numeric string with 7 decimal places (e.g. `"100.0000000"`). */
   balance: string;
-  /** Parsed as a float for convenience */
+  /** Balance pre-parsed as a floating-point number for convenience (e.g. `100`). */
   balanceFloat: number;
+  /** Outstanding buy-side liabilities (amount reserved in open buy offers). */
   buyingLiabilities: string;
+  /** Outstanding sell-side liabilities (amount reserved in open sell offers). */
   sellingLiabilities: string;
+  /** Trustline limit for non-native assets. Undefined for native XLM. */
   limit?: string;
+  /** `true` when this entry represents the native XLM balance. */
   isNative: boolean;
 }
 
@@ -221,16 +249,23 @@ export interface StellarBalance {
  * ```
  */
 export interface FreighterState {
+  /** Whether the Freighter browser extension is detected in the current environment. */
   isInstalled: boolean;
+  /** Whether the user has granted the dApp access to their Freighter wallet. */
   isConnected: boolean;
+  /** Connected wallet's Stellar public key (G...), or `null` when not connected. */
   publicKey: StellarPublicKey | null;
+  /** Network name reported by Freighter (e.g. `"TESTNET"`), or `null` when unavailable. */
   network: string | null;
+  /** Network passphrase reported by Freighter, or `null` when unavailable. */
   networkPassphrase: string | null;
-  /** True when Freighter's network passphrase differs from the app's expected network. */
+  /** `true` when Freighter's network passphrase differs from the app's expected network. */
   networkPassphraseMismatch: boolean;
-  /** Actionable warning when {@link networkPassphraseMismatch} is true; otherwise null. */
+  /** Actionable warning message when {@link networkPassphraseMismatch} is `true`; otherwise `null`. */
   networkPassphraseWarning: string | null;
+  /** `true` while the initial Freighter detection or a connect/disconnect call is in progress. */
   isLoading: boolean;
+  /** Most recent error from a Freighter interaction, or `null`. */
   error: Error | null;
 }
 
@@ -243,17 +278,32 @@ export interface UseFreighterOptions {
 }
 
 export interface UseFreighterReturn extends FreighterState {
+  /** Request wallet access from the user. Resolves when the user approves or rejects. */
   connect: () => Promise<void>;
+  /** Clear the active wallet session (does not revoke permissions in Freighter itself). */
   disconnect: () => void;
+  /**
+   * Sign a Stellar transaction XDR with the connected Freighter wallet.
+   * @example
+   * ```ts
+   * const signed = await signTransaction(builtXdr, { networkPassphrase });
+   * ```
+   */
   signTransaction: (xdr: StellarXdrString, opts?: SignTransactionOptions) => Promise<StellarXdrString>;
+  /** Sign a Soroban authorization entry preimage XDR with the connected wallet. */
   signAuthEntry: (entryPreimageXdr: StellarXdrString) => Promise<StellarXdrString>;
+  /** Sign an arbitrary data blob (e.g. for off-chain login proofs). */
   signBlob: (blob: string, opts?: { accountToSign?: string }) => Promise<string>;
 }
 
 export interface SignTransactionOptions {
+  /** Override the network passphrase used for signing (defaults to the provider's network). */
   networkPassphrase?: string;
+  /** Specific account address to sign with (useful when Freighter has multiple accounts). */
   address?: string;
+  /** When `true`, Freighter submits the transaction directly after signing. */
   submit?: boolean;
+  /** Custom Horizon URL for Freighter to submit the transaction to. */
   submitUrl?: string;
 }
 
@@ -277,18 +327,21 @@ export type StellarTransactionError =
   | {
       /** Request never reached the network */
       type: 'network';
+      /** Human-readable description of the network error. */
       message: string;
     }
   | {
       /** Transaction submitted but failed on-chain */
       type: 'transaction';
-      /** Stellar result code (e.g., "op_underfunded", "tx_bad_seq") */
+      /** Stellar result code (e.g., `"op_underfunded"`, `"tx_bad_seq"`). */
       resultCode: string;
+      /** Human-readable description of the on-chain failure. */
       message: string;
     }
   | {
       /** Operation timed out before completing */
       type: 'timeout';
+      /** Human-readable description of the timeout. */
       message: string;
     };
 
@@ -323,12 +376,19 @@ export type TransactionStatus =
  * ```
  */
 export interface TransactionState<TResult = unknown> {
+  /** Current lifecycle stage of the transaction. */
   status: TransactionStatus;
+  /** Transaction hash returned on successful submission, or `null` before submission. */
   hash: StellarTxHash | null;
+  /** Parsed result value from the transaction (e.g. Soroban return value), or `null`. */
   result: TResult | null;
+  /** Structured error when the transaction fails, or `null` on success. */
   error: StellarTransactionError | null;
+  /** `true` while the transaction is in any in-flight stage (building, signing, submitting, or polling). */
   isLoading: boolean;
+  /** `true` when the transaction has been confirmed on-chain. */
   isSuccess: boolean;
+  /** `true` when the transaction has failed or an error occurred. */
   isError: boolean;
 }
 
@@ -337,7 +397,9 @@ export interface TransactionState<TResult = unknown> {
 export interface ContractCallOptions<TResult = unknown> {
   /** Soroban contract address (C...) */
   contractId: StellarContractId;
+  /** Name of the Soroban contract method to invoke. */
   method: string;
+  /** Arguments to pass to the contract method as ScVal values. */
   args?: xdr.ScVal[];
   /** Fee in stroops. Defaults to 100 */
   fee?: number;
@@ -385,10 +447,15 @@ export interface UseContractCallReturn<TResult = unknown>
 // ─── Ledger Entry ─────────────────────────────────────────────────────────────
 
 export interface LedgerEntryState {
+  /** The raw ledger entry result from Soroban RPC, or `null` if not yet fetched or not found. */
   data: rpc.Api.LedgerEntryResult | null;
+  /** `true` while the ledger entry is being fetched from Soroban RPC. */
   isLoading: boolean;
+  /** Most recent fetch error, or `null`. */
   error: Error | null;
+  /** Manually trigger a re-fetch of the ledger entry. */
   refetch: () => Promise<void>;
+  /** Timestamp of the most recent successful fetch, or `null` if never fetched. */
   lastFetchedAt: Date | null;
 }
 
@@ -406,7 +473,9 @@ export interface StellarProviderProps {
 }
 
 export interface StellarContextValue {
+  /** Resolved network configuration (Horizon URL, Soroban RPC URL, passphrase). */
   config: NetworkConfig;
+  /** Currently active network identifier. */
   network: StellarNetwork;
   /** Provider-scoped in-memory map for deduplicating in-flight requests. */
   requestCache: Map<string, Promise<unknown>>;
@@ -425,12 +494,13 @@ export interface WalletsKitOptions {
 }
 
 export interface WalletsKitState {
-  /** Active wallet public key, null when not connected. */
+  /** Active wallet public key, or `null` when not connected. */
   publicKey: string | null;
   /** Whether an address is currently connected. */
   isConnected: boolean;
-  /** True while the connect (authModal) call is in-flight. */
+  /** `true` while the connect (authModal) call is in-flight. */
   isConnecting: boolean;
+  /** Most recent error from a wallet interaction, or `null`. */
   error: Error | null;
 }
 
@@ -482,13 +552,15 @@ export interface WalletConnectOptions {
 }
 
 export interface WalletConnectState {
-  /** Connected Stellar public key, null when not connected. */
+  /** Connected Stellar public key, or `null` when not connected. */
   publicKey: string | null;
+  /** Whether an active WalletConnect session exists. */
   isConnected: boolean;
-  /** True while connect() is in-flight (awaiting wallet approval). */
+  /** `true` while `connect()` is in-flight (awaiting wallet approval). */
   isConnecting: boolean;
-  /** WalletConnect pairing URI — show as QR code or deep-link. */
+  /** WalletConnect pairing URI — display as a QR code or deep-link while connecting. */
   uri: string | null;
+  /** Most recent error from a WalletConnect interaction, or `null`. */
   error: Error | null;
 }
 
