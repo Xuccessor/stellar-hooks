@@ -71,6 +71,7 @@ Every hook listed below is implemented and exported from the package entry point
 | Hook | Description |
 |------|-------------|
 | [`useFreighter()`](#usefreighter) ↓ | Connect to the [Freighter](https://freighter.app) extension (`@stellar/freighter-api` v6); sign transactions, auth entries, and messages. |
+| `useFreighterAccounts()` | Track previously-seen Freighter addresses in `localStorage`; drive the permission dialog to switch between them. |
 | `useWalletsKit()` | Multi-wallet adapter via [`@creit-tech/stellar-wallets-kit`](https://github.com/Creit-Tech/Stellar-Wallets-Kit) (Freighter, xBull, Albedo, Lobstr, WalletConnect, …). |
 | `useWalletConnect()` | WalletConnect v2 adapter for Stellar / Freighter Mobile. |
 | [`useNetwork()`](#usenetwork) ↓ | Read the active network configuration and switch networks at runtime. |

@@ -11,6 +11,11 @@ export { StellarProvider, useStellarContext } from "./context";
 // Hooks
 export { useNetwork } from "./hooks/useNetwork";
 export { useFreighter } from "./hooks/useFreighter";
+export { useFreighterAccounts } from "./hooks/useFreighterAccounts";
+export type {
+  UseFreighterAccountsOptions,
+  UseFreighterAccountsReturn,
+} from "./hooks/useFreighterAccounts";
 export { useStellarAccount } from "./hooks/useStellarAccount";
 export { useStellarAccounts } from "./hooks/useStellarAccounts";
 export type {

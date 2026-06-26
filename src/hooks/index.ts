@@ -18,6 +18,12 @@ export type { UseEffectsOptions, UseEffectsReturn } from "./useEffects";
 
 export { useFreighter } from "./useFreighter";
 
+export { useFreighterAccounts } from "./useFreighterAccounts";
+export type {
+  UseFreighterAccountsOptions,
+  UseFreighterAccountsReturn,
+} from "./useFreighterAccounts";
+
 
 export { useStellarToml } from "./useStellarToml";
 export type { UseStellarTomlOptions, UseStellarTomlReturn } from "./useStellarToml";

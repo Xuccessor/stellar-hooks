@@ -192,12 +192,56 @@ function SignMessage() {
 }
 ```
 
+## Multi-account selection (`useFreighterAccounts`)
+
+Freighter itself only exposes the currently *active* address — the extension does not let a dApp enumerate the user's other accounts. If you want to surface a custom wallet picker / account switcher on top of Freighter, use **`useFreighterAccounts`** in tandem with `useFreighter`. The hook keeps a persistent list of every address your dApp has previously been granted access to, plus a helper that drives Freighter's permission dialog when the user wants to switch.
+
+```tsx
+import { useFreighterAccounts } from "stellar-hooks";
+
+function AccountPicker() {
+  const { known, active, switchAccount, isSwitching } = useFreighterAccounts();
+
+  return (
+    <>
+      <select
+        value={active ?? ""}
+        disabled={isSwitching}
+        onChange={async (e) => {
+          const landed = await switchAccount(e.target.value);
+          if (landed !== e.target.value) {
+            alert(
+              `Freighter connected as ${landed ?? "nothing"} — pick ${e.target.value} in the extension.`,
+            );
+          }
+        }}
+      >
+        {known.length === 0
+          ? <option value="">No accounts yet</option>
+          : known.map((pk) => <option key={pk} value={pk}>{pk.slice(0, 8)}…</option>)}
+      </select>
+      <p>
+        Connected: <code>{active}</code>{" "}
+        {isSwitching ? <em>(switching…)</em> : null}
+      </p>
+    </>
+  );
+}
+```
+
+Key behaviours:
+
+- `known` is most-recent-first, deduped, capped at `maxHistory` (default `20`).
+- Persisted to `localStorage` under `"stellar-hooks:freighter-accounts"` by default; multi-tab-aware (reacts to `StorageEvent`).
+- `switchAccount(target)` drives Freighter's `requestAccess()` permission dialog. The optional `target` is accepted for caller-comparison only — Freighter surfaces whatever the user has marked active in the extension, so your UI should compare the returned address against your `target` and flag mismatches.
+- `remember(pk)`, `forget(pk)`, `clear()`, and `find(target)` expose manual list management (cross-device sync, recovery flows, validation).
+
 ## Notes
 
 - **Session Persistence**: The hook checks for an existing connection on mount and restores it automatically from `localStorage`.
 - **Wallet Changes**: The hook does **not** automatically react to account or network switches in Freighter by default. If you need live updates, you can poll or listen to Freighter events manually (Freighter v6+ emits custom events).
 - **Error Handling**: If `signTransaction` or `signBlob` fails (user rejects, network mismatch, etc.), the promise rejects and the error is captured in the `error` property.
-- **Multiple Accounts**: If the user has multiple accounts in Freighter, `publicKey` reflects the currently active one. Use the `address` option in `signTransaction` to sign with a specific account.
+- **Multiple Accounts**: If the user has multiple accounts in Freighter, `publicKey` reflects the currently active one. Use the `address` option in `signTransaction` to sign with a specific account, or `useFreighterAccounts` to track previously-seen addresses across sessions.
 
 ## Type Definitions
 
