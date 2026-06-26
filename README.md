@@ -876,6 +876,52 @@ const tx = buildCreateAccountTransaction(
 
 ---
 
+### `useLiquidityPool(poolId, options?)`
+
+Fetch Stellar AMM liquidity pool data (reserves, total shares, fee) from Horizon.
+
+```ts
+import { useLiquidityPool } from "stellar-hooks";
+
+const { pool, isLoading, error, refetch } = useLiquidityPool(
+  "pool-id-hash",
+  { refetchInterval: 10000 }
+);
+
+if (pool) {
+  console.log(pool.total_shares);  // "50000.0000000"
+  console.log(pool.fee_bp);        // 30
+  pool.reserves.forEach((r) =>
+    console.log(`${r.asset}: ${r.amount}`)
+  );
+}
+```
+
+---
+
+### `useAccountLiquidityPositions(publicKey, options?)`
+
+Fetch all AMM liquidity pool positions for a Stellar account.
+
+```ts
+import { useAccountLiquidityPositions } from "stellar-hooks";
+
+const { positions, isLoading, error, refetch } =
+  useAccountLiquidityPositions(publicKey);
+
+return positions.map((pool) => (
+  <div key={pool.id}>
+    <p>Pool: {pool.id}</p>
+    <p>Shares: {pool.total_shares}</p>
+    {pool.reserves.map((r) => (
+      <span key={r.asset}>{r.asset}: {r.amount}</span>
+    ))}
+  </div>
+));
+```
+
+---
+
 ### `useWalletConnect(options)`
 
 Connect to Stellar wallets via WalletConnect v2 (QR code / deep-link pairing).
