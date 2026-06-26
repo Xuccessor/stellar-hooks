@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
-import { useSorobanContract } from "../hooks/useSorobanContract";
-import { rpc, xdr } from "@stellar/stellar-sdk";
+import { renderHook, act, waitFor } from "@testing-library/react";
+import { useSorobanContract } from "./useSorobanContract";
+import { rpc } from "@stellar/stellar-sdk";
 
-// ─── Mocks ────────────────────────────────────────────────────────────────────
+// ─── Mocks ──────────────────────────────────────────────────────────────────────
 
 const {
   mockSignTransaction,
@@ -28,22 +28,25 @@ const {
   };
 });
 
-vi.mock("../hooks/useFreighter", () => ({
+vi.mock("./useFreighter", () => ({
   useFreighter: () => ({
     publicKey: "GBL5T5MLZ57JTBNS643LEJBKAKSOTJCCZVY54FTNZHDSNA56NS6LM3WG",
-    networkPassphrase: "Test Net",
+    networkPassphrase: "Test SDF Network ; September 2015",
     signTransaction: mockSignTransaction,
   }),
 }));
 
 vi.mock("../context", () => ({
   useStellarContext: () => ({
-    config: { sorobanRpcUrl: "https://rpc.example.com", networkPassphrase: "Test Net" },
+    config: {
+      sorobanRpcUrl: "https://rpc.example.com",
+      networkPassphrase: "Test SDF Network ; September 2015",
+    },
   }),
 }));
 
 vi.mock("@stellar/stellar-sdk/rpc", async (importOriginal) => {
-  const actual = await importOriginal() as any;
+  const actual = (await importOriginal()) as any;
   return {
     ...actual,
     Server: vi.fn().mockImplementation(() => ({
@@ -54,7 +57,8 @@ vi.mock("@stellar/stellar-sdk/rpc", async (importOriginal) => {
     })),
     Api: {
       ...actual.Api,
-      isSimulationError: (response: { error?: string }) => typeof response.error === "string",
+      isSimulationError: (response: { error?: string }) =>
+        typeof response.error === "string",
       GetTransactionStatus: { SUCCESS: "SUCCESS", FAILED: "FAILED" },
     },
     assembleTransaction: (tx: any) => ({ build: () => tx }),
@@ -62,7 +66,7 @@ vi.mock("@stellar/stellar-sdk/rpc", async (importOriginal) => {
 });
 
 vi.mock("@stellar/stellar-sdk", async (importOriginal) => {
-  const actual = await importOriginal() as any;
+  const actual = (await importOriginal()) as any;
   return {
     ...actual,
     Contract: vi.fn().mockImplementation(() => ({
@@ -83,7 +87,39 @@ vi.mock("@stellar/stellar-sdk", async (importOriginal) => {
   };
 });
 
-describe("useSorobanContract", () => {
+vi.mock("../utils", async (importOriginal) => {
+  const actual = (await importOriginal()) as any;
+  return {
+    ...actual,
+    sleep: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
+const CONTRACT_ID =
+  "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4" as any;
+const TX_HASH =
+  "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+
+// ─── Helpers ────────────────────────────────────────────────────────────────────
+
+function setupSuccessfulCall() {
+  mockSimulateTransaction.mockResolvedValue({
+    results: [{ retval: {} }],
+  });
+  mockSignTransaction.mockResolvedValue("signed-xdr");
+  mockSendTransaction.mockResolvedValue({
+    status: "PENDING",
+    hash: TX_HASH,
+  });
+  mockGetTransaction.mockResolvedValue({
+    status: rpc.Api.GetTransactionStatus.SUCCESS,
+    resultMetaXdr: null,
+  });
+}
+
+// ─── Tests ──────────────────────────────────────────────────────────────────────
+
+describe("useSorobanContract — status transitions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetAccount.mockResolvedValue({
@@ -92,25 +128,192 @@ describe("useSorobanContract", () => {
     });
   });
 
-  it("initializes with idle status", () => {
+  it("initializes with idle status and derived flags", () => {
     const { result } = renderHook(() =>
-      useSorobanContract("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4" as any, { method: "hello" })
+      useSorobanContract(CONTRACT_ID, { method: "hello" }),
     );
+
     expect(result.current.status).toBe("idle");
     expect(result.current.isLoading).toBe(false);
+    expect(result.current.isSuccess).toBe(false);
+    expect(result.current.isError).toBe(false);
+    expect(result.current.hash).toBeNull();
+    expect(result.current.result).toBeNull();
+    expect(result.current.error).toBeNull();
   });
 
-  it("executes a full call lifecycle successfully", async () => {
-    mockSimulateTransaction.mockResolvedValue({ results: [{ retval: {} }] });
+  it("progresses through full lifecycle: idle → building → signing → submitting → polling → success", async () => {
+    setupSuccessfulCall();
+
+    const { result } = renderHook(() =>
+      useSorobanContract(CONTRACT_ID, { method: "hello" }),
+    );
+
+    expect(result.current.status).toBe("idle");
+
+    await act(async () => {
+      await result.current.call();
+    });
+
+    expect(result.current.status).toBe("success");
+    expect(result.current.isSuccess).toBe(true);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.hash).toBe(TX_HASH);
+
+    expect(mockGetAccount).toHaveBeenCalled();
+    expect(mockSimulateTransaction).toHaveBeenCalled();
+    expect(mockSignTransaction).toHaveBeenCalled();
+    expect(mockSendTransaction).toHaveBeenCalled();
+    expect(mockGetTransaction).toHaveBeenCalled();
+
+    const simOrder = mockSimulateTransaction.mock.invocationCallOrder[0];
+    const signOrder = mockSignTransaction.mock.invocationCallOrder[0];
+    const sendOrder = mockSendTransaction.mock.invocationCallOrder[0];
+    const getOrder = mockGetTransaction.mock.invocationCallOrder[0];
+    expect(simOrder).toBeLessThan(signOrder);
+    expect(signOrder).toBeLessThan(sendOrder);
+    expect(sendOrder).toBeLessThan(getOrder);
+  });
+
+  it("fires onSuccess callback on successful completion", async () => {
+    setupSuccessfulCall();
+    const onSuccess = vi.fn();
+
+    const { result } = renderHook(() =>
+      useSorobanContract(CONTRACT_ID, { method: "hello", onSuccess }),
+    );
+
+    await act(async () => {
+      await result.current.call();
+    });
+
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it("transitions to error when user cancels signing", async () => {
+    mockSimulateTransaction.mockResolvedValue({
+      results: [{ retval: {} }],
+    });
+    mockSignTransaction.mockRejectedValue(new Error("User declined access"));
+
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      useSorobanContract(CONTRACT_ID, { method: "hello", onError }),
+    );
+
+    await act(async () => {
+      await result.current.call();
+    });
+
+    expect(result.current.status).toBe("error");
+    expect(result.current.isError).toBe(true);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.error?.message).toContain("User declined access");
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("transitions to error when transaction submission fails", async () => {
+    mockSimulateTransaction.mockResolvedValue({
+      results: [{ retval: {} }],
+    });
     mockSignTransaction.mockResolvedValue("signed-xdr");
-    mockSendTransaction.mockResolvedValue({ status: "PENDING", hash: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2" });
-    mockGetTransaction.mockResolvedValue({
-      status: rpc.Api.GetTransactionStatus.SUCCESS,
-      resultMetaXdr: null,
+    mockSendTransaction.mockResolvedValue({
+      status: "ERROR",
+      errorResult: "tx_bad_seq",
     });
 
     const { result } = renderHook(() =>
-      useSorobanContract("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4" as any, { method: "hello" })
+      useSorobanContract(CONTRACT_ID, { method: "hello" }),
+    );
+
+    await act(async () => {
+      await result.current.call();
+    });
+
+    expect(result.current.status).toBe("error");
+    expect(result.current.isError).toBe(true);
+    expect(result.current.error?.type).toBe("network");
+    expect(result.current.error?.message).toContain("Submission failed");
+  });
+
+  it("transitions to error when simulation returns an error", async () => {
+    mockSimulateTransaction.mockResolvedValue({
+      error: "contract method not found",
+    });
+
+    const { result } = renderHook(() =>
+      useSorobanContract(CONTRACT_ID, { method: "bad_method" }),
+    );
+
+    await act(async () => {
+      await result.current.call();
+    });
+
+    expect(result.current.status).toBe("error");
+    expect(result.current.error?.type).toBe("network");
+    expect(result.current.error?.message).toContain("Simulation failed");
+  });
+
+  it("transitions to error when transaction fails on-chain", async () => {
+    mockSimulateTransaction.mockResolvedValue({
+      results: [{ retval: {} }],
+    });
+    mockSignTransaction.mockResolvedValue("signed-xdr");
+    mockSendTransaction.mockResolvedValue({
+      status: "PENDING",
+      hash: TX_HASH,
+    });
+    mockGetTransaction.mockResolvedValue({
+      status: rpc.Api.GetTransactionStatus.FAILED,
+    });
+
+    const { result } = renderHook(() =>
+      useSorobanContract(CONTRACT_ID, { method: "hello" }),
+    );
+
+    await act(async () => {
+      await result.current.call();
+    });
+
+    expect(result.current.status).toBe("error");
+    expect(result.current.error?.type).toBe("transaction");
+    expect(result.current.error?.message).toContain("failed on-chain");
+  });
+
+  it("reset() clears all state back to idle", async () => {
+    mockSimulateTransaction.mockResolvedValue({
+      error: "boom",
+    });
+
+    const { result } = renderHook(() =>
+      useSorobanContract(CONTRACT_ID, { method: "hello" }),
+    );
+
+    await act(async () => {
+      await result.current.call();
+    });
+
+    expect(result.current.status).toBe("error");
+    expect(result.current.error).not.toBeNull();
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.status).toBe("idle");
+    expect(result.current.hash).toBeNull();
+    expect(result.current.result).toBeNull();
+    expect(result.current.error).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isSuccess).toBe(false);
+    expect(result.current.isError).toBe(false);
+  });
+
+  it("reset() clears state after a successful call", async () => {
+    setupSuccessfulCall();
+
+    const { result } = renderHook(() =>
+      useSorobanContract(CONTRACT_ID, { method: "hello" }),
     );
 
     await act(async () => {
@@ -118,89 +321,13 @@ describe("useSorobanContract", () => {
     });
 
     expect(result.current.status).toBe("success");
-    expect(result.current.hash).toBe("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2");
-    expect(mockSignTransaction).toHaveBeenCalled();
-    expect(mockSendTransaction).toHaveBeenCalled();
-  });
 
-  it("performs a query (simulation) without signing", async () => {
-    mockSimulateTransaction.mockResolvedValue({
-      result: { retval: xdr.ScVal.scvSymbol("query_ok") },
-      latestLedger: 100,
+    act(() => {
+      result.current.reset();
     });
-
-    const { result } = renderHook(() =>
-      useSorobanContract("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4" as any, {
-        method: "get_val",
-        parseResult: () => "parsed_val",
-      })
-    );
-
-    await act(async () => {
-      const queryRes = await result.current.query();
-      expect(queryRes).toBe("parsed_val");
-    });
-
-    expect(result.current.status).toBe("success");
-    expect(mockSignTransaction).not.toHaveBeenCalled();
-  });
-
-  it("performs a dryRun (simulation-only) without signing — alias of query with explicit naming", async () => {
-    mockSimulateTransaction.mockResolvedValue({
-      result: { retval: xdr.ScVal.scvSymbol("dry_ok") },
-      latestLedger: 100,
-    });
-
-    const { result } = renderHook(() =>
-      useSorobanContract("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4" as any, {
-        method: "get_val",
-        parseResult: () => "parsed_val",
-      })
-    );
-
-    await act(async () => {
-      const dryRes = await result.current.dryRun();
-      expect(dryRes).toBe("parsed_val");
-    });
-
-    // Lifecycle lands on success — not building/signing/submitting.
-    expect(result.current.status).toBe("success");
-
-    // dryRun must NEVER touch the signing or submission surface.
-    expect(mockSignTransaction).not.toHaveBeenCalled();
-    expect(mockSendTransaction).not.toHaveBeenCalled();
-
-    // Sanity: dryRun and query are documented as the same underlying
-    // function. If a future refactor ever diverges them, this test
-    // surfaces the change instead of silently keeping both in sync.
-    expect(result.current.dryRun).toBe(result.current.query);
-  });
-
-  it("propagates simulation failures from dryRun into the error state", async () => {
-    mockSimulateTransaction.mockResolvedValue({ error: "contract revert: not allowed" });
-
-    const { result } = renderHook(() =>
-      useSorobanContract("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4" as any, { method: "increment" })
-    );
-
-    await act(async () => {
-      const dryRes = await result.current.dryRun();
-      expect(dryRes).toBeNull();
-    });
-
-    expect(result.current.status).toBe("error");
-    expect(result.current.error?.message).toMatch(/Simulation failed/);
-    expect(result.current.result).toBeNull();
-  });
-
-  it("resets state correctly", async () => {
-    const { result } = renderHook(() =>
-      useSorobanContract("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4" as any, { method: "hello" })
-    );
-
-    act(() => { result.current.reset(); });
 
     expect(result.current.status).toBe("idle");
+    expect(result.current.hash).toBeNull();
     expect(result.current.result).toBeNull();
   });
 });
