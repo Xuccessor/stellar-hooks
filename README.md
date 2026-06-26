@@ -80,6 +80,7 @@ Every hook listed below is implemented and exported from the package entry point
 | Hook | Description |
 |------|-------------|
 | [`useStellarAccount()`](#usestellaraccountpublickey-options) ↓ | Fetch (and optionally poll) a full account from Horizon. |
+| `useStellarAccounts()` | Fetch and poll multiple accounts in parallel (no serial waterfall). |
 | [`useStellarBalance()`](#usestellarbalancepublickey-options) ↓ | XLM and per-asset balances (wrapper around `useStellarAccount`). |
 | `useSorobanTokenBalance()` | Read SAC (Stellar Asset Contract) token balances via Soroban RPC. |
 | [`useLedgerEntry()`](#useledgerentryledgerkey-options) ↓ | Read a raw Soroban ledger entry by its `xdr.LedgerKey`. |
@@ -251,6 +252,26 @@ const {
   refetch,
 } = useStellarBalance("G...", { code: "USDC", issuer: "G..." });
 ```
+
+### `useStellarAccounts(publicKeys[], options?)`
+
+Fetch and poll multiple Stellar accounts in parallel — useful for multisig rosters, account pickers, or any list view. Issues one batched `Promise.all(loadAccount)` per tick and returns a per-key map.
+
+```ts
+const {
+  accounts,      // Record<publicKey, StellarAccountData | null>
+  errors,        // Record<publicKey, Error | null>
+  isLoading,
+  isError,
+  error,         // First per-key error across the batch, or null
+  refetch,
+  lastFetchedAt,
+} = useStellarAccounts([signerA, signerB, signerC], { refetchInterval: 10_000 });
+```
+
+- `null`/`undefined` entries in the input are skipped.
+- Duplicate keys are deduplicated before the RPC call.
+- A single failing account does NOT poison the rest of the batch — `errors[pk]` carries per-key errors.
 
 ---
 

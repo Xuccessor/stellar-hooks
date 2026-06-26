@@ -12,6 +12,11 @@ export { StellarProvider, useStellarContext } from "./context";
 export { useNetwork } from "./hooks/useNetwork";
 export { useFreighter } from "./hooks/useFreighter";
 export { useStellarAccount } from "./hooks/useStellarAccount";
+export { useStellarAccounts } from "./hooks/useStellarAccounts";
+export type {
+  UseStellarAccountsOptions,
+  UseStellarAccountsReturn,
+} from "./hooks/useStellarAccounts";
 export { useStellarBalance } from "./hooks/useStellarBalance";
 export { useSorobanContract } from "./hooks/useSorobanContract";
 export { useTransaction } from "./hooks/useTransaction";
