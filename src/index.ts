@@ -180,3 +180,23 @@ export { parseAccountResponse, getCache, setCache } from "./utils";
 
 export { useOfferBook } from "./hooks/useOfferBook";
 export type { UseOfferBookOptions } from "./hooks/useOfferBook";
+
+export { useContractId } from "./hooks/useContractId";
+export type {
+  AssetDescriptor,
+  UseContractIdReturn,
+} from "./hooks/useContractId";
+
+export { useSequenceNumber } from "./hooks/useSequenceNumber";
+export type {
+  UseSequenceNumberOptions,
+  UseSequenceNumberReturn,
+} from "./hooks/useSequenceNumber";
+
+export { useFeeStats } from "./hooks/useFeeStats";
+export type {
+  FeePercentile,
+  FeeStats,
+  UseFeeStatsOptions,
+  UseFeeStatsReturn,
+} from "./hooks/useFeeStats";
