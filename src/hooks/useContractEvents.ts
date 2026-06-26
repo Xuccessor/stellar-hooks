@@ -23,6 +23,10 @@ export interface UseContractEventsOptions {
   startLedger?: number;
   /** Interval in milliseconds to continuously stream/poll events. Default: 0 (disabled) */
   refetchInterval?: number;
+  /** Fetching mode. 'poll' uses repeated RPC calls; 'stream' is reserved for future streaming support. Default: 'poll' */
+  mode?: "poll" | "stream";
+  /** Poll interval in milliseconds (alias for refetchInterval when mode is 'poll'). Takes precedence over refetchInterval when set. */
+  pollInterval?: number;
 }
 
 interface EventsState {
@@ -71,6 +75,9 @@ export function useContractEvents(options: UseContractEventsOptions) {
     error: null,
   });
 
+  const mode = options.mode ?? "poll";
+  const interval = options.pollInterval ?? options.refetchInterval ?? 0;
+
   const cursorRef = useRef<string | undefined>();
   const isMounted = useRef(true);
 
@@ -79,7 +86,7 @@ export function useContractEvents(options: UseContractEventsOptions) {
       validateContractId(options.contractId);
       dispatch({ type: "LOADING" });
       const server = new rpc.Server(config.sorobanRpcUrl);
-      
+
       const filter: rpc.Api.EventFilter = {
         type: options.type || "contract",
         contractIds: [options.contractId],
@@ -108,22 +115,33 @@ export function useContractEvents(options: UseContractEventsOptions) {
   }, [config.sorobanRpcUrl, options.contractId, options.type, options.topics, options.startLedger, options.limit]);
 
   useEffect(() => {
+    if (mode === "stream") {
+      dispatch({
+        type: "ERROR",
+        payload: new Error(
+          "Stream mode is not yet supported. Use mode: 'poll' (default) instead."
+        ),
+      });
+      return;
+    }
+
     isMounted.current = true;
     fetchEvents();
 
     let intervalId: ReturnType<typeof setInterval>;
-    if (options.refetchInterval && options.refetchInterval > 0) {
-      intervalId = setInterval(fetchEvents, options.refetchInterval);
+    if (interval > 0) {
+      intervalId = setInterval(fetchEvents, interval);
     }
 
     return () => {
       isMounted.current = false;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [fetchEvents, options.refetchInterval]);
+  }, [fetchEvents, interval, mode]);
 
-  return { 
-    ...state, 
+  return {
+    ...state,
+    mode,
     refetch: fetchEvents,
     stop: () => { isMounted.current = false; },
     start: () => { isMounted.current = true; fetchEvents(); }

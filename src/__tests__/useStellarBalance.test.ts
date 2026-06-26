@@ -295,4 +295,127 @@ describe("useStellarBalance", () => {
 
     expect(result.current.assetBalance).toBeNull();
   });
+
+  // ─── Edge-case tests (#261) ──────────────────────────────────────────────────
+
+  it("returns balances: [] and no fetch when publicKey is null", () => {
+    mockUseStellarAccount.mockReturnValue({
+      account: null,
+      data: null,
+      isLoading: false,
+      error: null,
+      lastFetchedAt: null,
+      refetch: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useStellarBalance(null));
+
+    expect(result.current.balances).toEqual([]);
+    expect(result.current.xlmBalance).toBeNull();
+    expect(result.current.assetBalance).toBeNull();
+    expect(result.current.data).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(mockUseStellarAccount).toHaveBeenCalledWith(null, undefined);
+  });
+
+  it("returns only native XLM balance for XLM-only account", () => {
+    mockUseStellarAccount.mockReturnValue(XLM_ONLY_DATA);
+
+    const { result } = renderHook(() => useStellarBalance("GABC..."));
+
+    expect(result.current.balances).toHaveLength(1);
+    expect(result.current.xlmBalance).not.toBeNull();
+    expect(result.current.xlmBalance!.isNative).toBe(true);
+    expect(result.current.xlmBalance!.balance).toBe("100.0000000");
+    expect(result.current.assetBalance).toBeNull();
+  });
+
+  it("handles account with 10+ assets and returns all balances", () => {
+    const manyAssets = Array.from({ length: 12 }, (_, i) => ({
+      assetType: "credit_alphanum4",
+      assetCode: `TK${String(i).padStart(2, "0")}`,
+      assetIssuer: `GISSUER${i}`,
+      balance: `${(i + 1) * 10}.0000000`,
+      balanceFloat: (i + 1) * 10,
+      isNative: false,
+      buyingLiabilities: "0",
+      sellingLiabilities: "0",
+      limit: "1000",
+    }));
+
+    const nativeBalance = {
+      assetType: "native",
+      balance: "500.0000000",
+      balanceFloat: 500,
+      isNative: true,
+      buyingLiabilities: "0",
+      sellingLiabilities: "0",
+    };
+
+    const allBalances = [nativeBalance, ...manyAssets];
+
+    mockUseStellarAccount.mockReturnValue({
+      account: null,
+      data: {
+        accountId: "GABC...",
+        balances: allBalances,
+        sequence: "1",
+        subentryCount: 12,
+        numSponsored: 0,
+        numSponsoring: 0,
+        thresholds: { lowThreshold: 0, medThreshold: 0, highThreshold: 0 },
+        flags: { authRequired: false, authRevocable: false, authImmutable: false, authClawbackEnabled: false },
+        raw: {} as unknown as import("@stellar/stellar-sdk").Horizon.AccountResponse,
+      },
+      isLoading: false,
+      error: null,
+      lastFetchedAt: new Date(),
+      refetch: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useStellarBalance("GABC..."));
+
+    expect(result.current.balances).toHaveLength(13);
+    expect(result.current.xlmBalance?.balance).toBe("500.0000000");
+
+    const assetCodes = result.current.balances
+      .filter((b) => !b.isNative)
+      .map((b) => b.assetCode);
+    expect(assetCodes).toHaveLength(12);
+    expect(assetCodes).toContain("TK00");
+    expect(assetCodes).toContain("TK11");
+  });
+
+  it("passes refetchInterval option to useStellarAccount for re-fetching", () => {
+    mockUseStellarAccount.mockReturnValue({
+      account: null,
+      data: null,
+      isLoading: false,
+      error: null,
+      lastFetchedAt: null,
+      refetch: vi.fn(),
+    });
+
+    renderHook(() =>
+      useStellarBalance("GABC...", { refetchInterval: 3000 })
+    );
+
+    expect(mockUseStellarAccount).toHaveBeenCalledWith("GABC...", {
+      refetchInterval: 3000,
+    });
+  });
+
+  it("passes refetchInterval as third arg when asset is second arg", () => {
+    const asset = { code: "USDC", issuer: "GISSUER" };
+    mockUseStellarAccount.mockReturnValue(MULTI_ASSET_DATA);
+
+    renderHook(() =>
+      useStellarBalance("GABC...", asset, { refetchInterval: 5000 })
+    );
+
+    expect(mockUseStellarAccount).toHaveBeenCalledWith("GABC...", {
+      refetchInterval: 5000,
+    });
+  });
 });
