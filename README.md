@@ -301,6 +301,582 @@ return <button onClick={submit} disabled={isLoading}>Send XLM</button>;
 
 ---
 
+### `usePathPayment(options)`
+
+Build, sign, and submit a strict-send or strict-receive path payment via Freighter.
+
+```ts
+import { usePathPayment } from "stellar-hooks";
+
+const {
+  submit,    // () => Promise<void>
+  status,    // TransactionStatus
+  hash,      // string | null
+  isLoading, // boolean
+  isSuccess, // boolean
+  isError,   // boolean
+  error,     // StellarTransactionError | null
+  reset,     // () => void
+} = usePathPayment({
+  mode: "strict-send",               // "strict-send" | "strict-receive"
+  sendAsset: { type: "native" },     // XLM
+  sendAmount: "10",
+  destination: "GBXXX...",
+  destAsset: { type: "credit", code: "USDC", issuer: "G..." },
+  destMin: "9",                      // minimum received
+  path: [],                          // [] = Horizon auto-selects
+  fee: 100,                          // optional, stroops (default: 100)
+  timeoutSeconds: 60,                // optional (default: 60)
+  onSuccess: (hash) => console.log("Sent!", hash),
+  onError:   (err)  => console.error(err),
+});
+
+return <button onClick={submit} disabled={isLoading}>Path Payment</button>;
+```
+
+---
+
+### `useStellarToml(domain, options?)`
+
+Fetch and parse a domain's `stellar.toml` file (SEP-1).
+
+```ts
+import { useStellarToml } from "stellar-hooks";
+
+const {
+  data,      // StellarTomlData | null — parsed stellar.toml contents
+  isLoading, // boolean
+  error,     // Error | null
+  refetch,   // () => Promise<void>
+} = useStellarToml("stellar.org", {
+  cacheTTL: 300000,  // optional, cache TTL in ms (default: 5 min)
+});
+
+// data.CURRENCIES   → array of supported assets
+// data.DOCUMENTATION → org info
+// data.VALIDATORS   → validator list
+```
+
+---
+
+### `useAssetMetadata(assetCode, assetIssuer)`
+
+Resolve full asset metadata by composing `useStellarAccount` (to find the issuer's `home_domain`) and `useStellarToml` (to fetch the matching `CURRENCIES` entry).
+
+```ts
+import { useAssetMetadata } from "stellar-hooks";
+
+const {
+  metadata,  // AssetMetadata | null — { code, issuer, name, desc, image, ... }
+  isLoading, // boolean
+  error,     // Error | null
+} = useAssetMetadata("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN");
+
+// metadata.name  → "USD Coin"
+// metadata.image → logo URL
+// metadata.desc  → description
+```
+
+---
+
+### `useStellarOffers(publicKey, options?)`
+
+Fetch open buy/sell offers from Horizon for a given account.
+
+```ts
+import { useStellarOffers } from "stellar-hooks";
+
+const {
+  offers,        // OfferRecord[] — open offers
+  isLoading,     // boolean
+  error,         // Error | null
+  lastFetchedAt, // Date | null
+  refetch,       // () => Promise<void>
+} = useStellarOffers("G...", {
+  enabled: true,          // default: true
+  refetchInterval: 10000, // poll every 10 s; 0 = disabled (default)
+});
+
+// Each offer: { id, selling, buying, amount, price, seller, ... }
+```
+
+---
+
+### `useOfferBook(options)`
+
+Fetch the DEX order book for a given asset pair from Horizon.
+
+```ts
+import { useOfferBook } from "stellar-hooks";
+import { Asset } from "@stellar/stellar-sdk";
+
+const { data, isLoading, error } = useOfferBook({
+  selling: Asset.native(),
+  buying: new Asset("USDC", "GA5ZSE..."),
+  limit: 20,              // optional (default: 20)
+  refetchInterval: 5000,  // optional, poll every 5 s
+});
+
+// data.bids — buy orders
+// data.asks — sell orders
+```
+
+---
+
+### `useContractEvents(options)`
+
+Poll Soroban contract events from the RPC endpoint.
+
+```ts
+import { useContractEvents } from "stellar-hooks";
+
+const {
+  data: events, // EventResponse[]
+  isLoading,    // boolean
+  error,        // Error | null
+  refetch,      // () => Promise<void>
+} = useContractEvents({
+  contractId: "CABC...XYZ",
+  startLedger: 100000,
+  topics: [["transfer"]],     // optional topic filters
+  type: "contract",            // optional: "system" | "contract" | "diagnostic"
+  limit: 100,                 // optional (default: 100)
+  refetchInterval: 5000,      // optional, poll every 5 s; 0 = disabled (default)
+});
+```
+
+---
+
+### `useEffects(publicKey, options?)`
+
+Stream account effects from Horizon via SSE (Server-Sent Events).
+
+```ts
+import { useEffects } from "stellar-hooks";
+
+const {
+  effects,       // EffectRecord[]
+  isLoading,     // boolean
+  isStreaming,   // boolean — true while SSE is active
+  error,         // Error | null
+  lastFetchedAt, // Date | null
+  refetch,       // () => Promise<void>
+  stop,          // () => void — close the SSE stream
+  start,         // () => void — reopen the SSE stream
+} = useEffects("G...", {
+  enabled: true,  // default: true
+  limit: 20,      // default: 20
+  order: "desc",  // default: "desc"
+  stream: true,   // default: true — subscribe to live updates
+});
+```
+
+---
+
+### `useOperations(options)`
+
+Fetch operations for an account or transaction from Horizon.
+
+```ts
+import { useOperations } from "stellar-hooks";
+
+// By account
+const { operations, isLoading, error, refetch } = useOperations({
+  accountId: "G...",
+  limit: 20,              // default: 10
+  order: "desc",          // default: "desc"
+  refetchInterval: 10000, // optional
+});
+
+// By transaction hash
+const { operations } = useOperations({
+  transactionHash: "abc123...",
+});
+```
+
+---
+
+### `useAssets(options?)`
+
+Fetch and list Stellar assets via Horizon.
+
+```ts
+import { useAssets } from "stellar-hooks";
+
+const {
+  assets,    // AssetRecord[]
+  isLoading, // boolean
+  error,     // Error | null
+  refetch,   // () => Promise<void>
+} = useAssets({
+  assetCode: "USDC",     // optional filter
+  assetIssuer: "G...",   // optional filter
+  limit: 10,             // default: 10, max: 200
+  order: "asc",          // default: "asc"
+  enabled: true,         // default: true
+});
+```
+
+---
+
+### `useTrade(options?)`
+
+Place, modify, and cancel classic Stellar DEX offers.
+
+```ts
+import { useTrade } from "stellar-hooks";
+
+const {
+  placeOffer,  // (params: PlaceOfferParams) => Promise<void>
+  modifyOffer, // (params: ModifyOfferParams) => Promise<void>
+  cancelOffer, // (params: CancelOfferParams) => Promise<void>
+  status,      // TransactionStatus
+  hash,        // string | null
+  isLoading,   // boolean
+  isSuccess,   // boolean
+  isError,     // boolean
+  error,       // StellarTransactionError | null
+  reset,       // () => void
+} = useTrade({
+  fee: 100,            // optional (default: 100)
+  timeoutSeconds: 60,  // optional (default: 60)
+  onSuccess: (hash) => console.log("Offer tx:", hash),
+});
+
+// Place a sell offer: sell 100 XLM for USDC at price 0.12
+await placeOffer({
+  type: "sell",
+  selling: { type: "native" },
+  buying: { type: "credit", code: "USDC", issuer: "G..." },
+  amount: "100",
+  price: "0.12",
+});
+```
+
+---
+
+### `useTrustline(options)`
+
+Add, modify, or remove a Stellar trustline.
+
+```ts
+import { useTrustline } from "stellar-hooks";
+
+const {
+  submit,    // () => Promise<void>
+  status,    // TransactionStatus
+  hash,      // string | null
+  isLoading, // boolean
+  isSuccess, // boolean
+  isError,   // boolean
+  error,     // StellarTransactionError | null
+  reset,     // () => void
+} = useTrustline({
+  code: "USDC",
+  issuer: "GA5Z...",
+  limit: "1000",   // optional; "0" removes the trustline
+  fee: 100,        // optional (default: 100)
+});
+
+return <button onClick={submit} disabled={isLoading}>Add Trustline</button>;
+```
+
+---
+
+### `useAccountFlags(options)`
+
+Set or clear authorization flags on a Stellar issuer account.
+
+```ts
+import { useAccountFlags } from "stellar-hooks";
+
+const {
+  submit,    // () => Promise<void>
+  status,    // TransactionStatus
+  hash,      // string | null
+  isLoading, // boolean
+  isSuccess, // boolean
+  isError,   // boolean
+  error,     // StellarTransactionError | null
+  reset,     // () => void
+} = useAccountFlags({
+  setFlags: ["authRequired", "authRevocable"],
+  clearFlags: [],  // optional
+});
+
+return <button onClick={submit} disabled={isLoading}>Update Flags</button>;
+```
+
+Available flags: `"authRequired"`, `"authRevocable"`, `"authImmutable"`, `"authClawbackEnabled"`.
+
+---
+
+### `useAccountMerge(options)`
+
+Merge the connected account into a destination account, transferring all remaining XLM.
+
+```ts
+import { useAccountMerge } from "stellar-hooks";
+
+const {
+  submit,    // () => Promise<void>
+  status,    // TransactionStatus
+  hash,      // string | null
+  isLoading, // boolean
+  error,     // StellarTransactionError | null
+  reset,     // () => void
+} = useAccountMerge({
+  destination: "GBXXX...",
+  memo: "Closing account",  // optional
+});
+
+return <button onClick={submit} disabled={isLoading}>Merge Account</button>;
+```
+
+---
+
+### `useBumpSequence(options)`
+
+Bump a Stellar account's sequence number forward.
+
+```ts
+import { useBumpSequence } from "stellar-hooks";
+
+const {
+  submit,    // () => Promise<void>
+  status,    // TransactionStatus
+  hash,      // string | null
+  isLoading, // boolean
+  error,     // StellarTransactionError | null
+  reset,     // () => void
+} = useBumpSequence({
+  bumpTo: "1000000",  // new minimum sequence number
+});
+
+return <button onClick={submit} disabled={status !== "idle"}>Bump Sequence</button>;
+```
+
+---
+
+### `useInflation(options?)`
+
+Submit a legacy inflation operation.
+
+```ts
+import { useInflation } from "stellar-hooks";
+
+const {
+  submit,    // () => Promise<void>
+  status,    // TransactionStatus
+  hash,      // string | null
+  isLoading, // boolean
+  error,     // StellarTransactionError | null
+  reset,     // () => void
+} = useInflation({
+  fee: 100,            // optional (default: 100)
+  timeoutSeconds: 60,  // optional (default: 60)
+  memo: "Inflation",   // optional
+});
+
+return <button onClick={submit} disabled={isLoading}>Vote Inflation</button>;
+```
+
+---
+
+### `useManageData(options?)`
+
+Set or delete key-value data entries on a Stellar account.
+
+```ts
+import { useManageData } from "stellar-hooks";
+
+const {
+  set,       // (name: string, value: string | Buffer) => Promise<void>
+  remove,    // (name: string) => Promise<void>
+  status,    // TransactionStatus
+  hash,      // string | null
+  isLoading, // boolean
+  error,     // StellarTransactionError | null
+  reset,     // () => void
+} = useManageData();
+
+await set("my-key", "my-value");  // store a data entry
+await remove("my-key");           // delete a data entry
+```
+
+---
+
+### `useClaimableBalances(publicKey)` / `useClaimBalance(options?)` / `useCreateClaimableBalance(options?)`
+
+List, claim, and create claimable balances.
+
+```ts
+import {
+  useClaimableBalances,
+  useClaimBalance,
+  useCreateClaimableBalance,
+} from "stellar-hooks";
+
+// List claimable balances for an account
+const { balances, isLoading, refetch } = useClaimableBalances("G...");
+
+// Claim a balance
+const { claim, status, hash, error } = useClaimBalance({
+  onSuccess: (hash) => { console.log("Claimed!", hash); refetch(); },
+});
+
+await claim(balances[0].id);
+
+// Create a claimable balance
+const { create, status: createStatus } = useCreateClaimableBalance();
+```
+
+---
+
+### `useSorobanTokenBalance(contractId, publicKey, options?)`
+
+Read a SAC (Stellar Asset Contract) token balance via Soroban RPC.
+
+```ts
+import { useSorobanTokenBalance } from "stellar-hooks";
+
+const {
+  balance,       // bigint | null — raw token balance (i128)
+  formatted,     // string | null — e.g. "100.0000000"
+  isLoading,     // boolean
+  error,         // Error | null
+  lastFetchedAt, // Date | null
+  refetch,       // () => Promise<void>
+} = useSorobanTokenBalance("CABC...XYZ", "G...", {
+  enabled: true,          // default: true
+  refetchInterval: 5000,  // poll every 5 s; 0 = disabled (default)
+  decimals: 7,            // default: 7 (Stellar standard)
+  cacheTTL: 30000,        // default: 30 s
+});
+```
+
+---
+
+### `useMultiSig(options?)`
+
+Build a multi-signature Stellar transaction, collect signatures from multiple Freighter-connected signers, and submit.
+
+```ts
+import { useMultiSig } from "stellar-hooks";
+import { Operation } from "@stellar/stellar-sdk";
+
+const {
+  build,          // (operations, options?) => Promise<string> — build unsigned XDR
+  sign,           // (xdr?) => Promise<string> — add a signature
+  submit,         // (signedXdr) => Promise<void> — submit to network
+  unsignedXdr,    // string | null
+  signatureCount, // number
+  status,         // TransactionStatus
+  hash,           // string | null
+  isLoading,      // boolean
+  error,          // StellarTransactionError | null
+  reset,          // () => void
+} = useMultiSig();
+
+// Step 1 — build the transaction
+const xdr = await build([Operation.payment({ ... })]);
+
+// Step 2 — first signer signs
+const signedOnce = await sign(xdr);
+
+// Step 3 — second signer signs (after receiving XDR out-of-band)
+const signedTwice = await sign(signedOnce);
+
+// Step 4 — submit when threshold is met
+await submit(signedTwice);
+```
+
+---
+
+### `useCreateAccount(options?)`
+
+Fund a new Stellar account via Friendbot (testnet/futurenet) or build a `CreateAccount` operation for mainnet.
+
+```ts
+import { useCreateAccount } from "stellar-hooks";
+
+const {
+  fundWithFriendbot,              // (publicKey: string) => Promise<void>
+  buildCreateAccountTransaction,  // (source, dest, balance, seq, fee?) => Transaction
+  isLoading,                      // boolean
+  error,                          // StellarTransactionError | null
+} = useCreateAccount();
+
+// Fund on testnet
+await fundWithFriendbot("GNEW_PUBLIC_KEY...");
+
+// Build a createAccount tx for mainnet
+const tx = buildCreateAccountTransaction(
+  sourceAccountId,
+  destinationPublicKey,
+  "1",             // startingBalance in XLM
+  sequenceNumber,
+);
+```
+
+---
+
+### `useWalletConnect(options)`
+
+Connect to Stellar wallets via WalletConnect v2 (QR code / deep-link pairing).
+
+```ts
+import { useWalletConnect } from "stellar-hooks";
+
+const {
+  publicKey,       // string | null — connected Stellar address
+  isConnected,     // boolean
+  isConnecting,    // boolean
+  uri,             // string | null — show as QR code while connecting
+  error,           // Error | null
+  connect,         // () => Promise<string | null>
+  disconnect,      // () => Promise<void>
+  signTransaction, // (xdr, opts?) => Promise<string>
+} = useWalletConnect({
+  projectId: "YOUR_REOWN_PROJECT_ID",
+  metadata: {
+    name: "My dApp",
+    description: "A Stellar dApp",
+    url: "https://mydapp.example.com",
+    icons: ["https://mydapp.example.com/icon.png"],
+  },
+  chain: "stellar:testnet",  // optional (default: "stellar:testnet")
+});
+```
+
+---
+
+### `useWalletsKit(options)`
+
+Multi-wallet support via `@creit-tech/stellar-wallets-kit` — connect to Freighter, xBull, Albedo, Lobstr, and more through a single hook.
+
+```ts
+import { useWalletsKit } from "stellar-hooks";
+import { defaultModules } from "@creit-tech/stellar-wallets-kit/sdk";
+
+const {
+  publicKey,       // string | null
+  isConnected,     // boolean
+  isConnecting,    // boolean
+  error,           // Error | null
+  connect,         // () => Promise<string | null>
+  disconnect,      // () => void
+  signTransaction, // (xdr, opts?) => Promise<string>
+  signAuthEntry,   // (authEntry, opts?) => Promise<string>
+  signMessage,     // (message, opts?) => Promise<string>
+} = useWalletsKit({
+  modules: defaultModules(),
+  selectedWalletId: "freighter",  // optional pre-selection
+});
+```
+
+---
+
 ## Provider
 
 Wrap your app (or the portion that needs Stellar) with `<StellarProvider>` to configure the network. Every hook that reads blockchain data consumes endpoint configuration from this provider.
@@ -406,6 +982,12 @@ import type {
 | react-dom | ≥ 18 |
 
 The library ships with `@stellar/stellar-sdk` v13 and `@stellar/freighter-api` v2 as direct dependencies — you don't need to install them separately unless you need a different version.
+
+---
+
+## Migration
+
+See [MIGRATION.md](MIGRATION.md) for a version-by-version guide to breaking changes and how to update your code.
 
 ---
 
