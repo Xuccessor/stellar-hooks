@@ -141,6 +141,27 @@ describe("useFreighter — network passphrase mismatch", () => {
     expect(result.current.networkPassphraseMismatch).toBe(false);
     expect(result.current.networkPassphraseWarning).toBeNull();
   });
+
+  it("warning text names each network AND tells the user how to recover", async () => {
+    mockFreighterConnected(
+      "GAAZI4BCE7Y5L7S25K2LJKBJHW7X2UHLW4XY5R2DZPHFBUHE5PQ7L2UQ",
+      "PUBLIC",
+      "Public Global Stellar Network ; September 2015",
+    );
+
+    const { result } = renderHook(() =>
+      useFreighter({ expectedNetworkPassphrase: "Test SDF Network ; September 2015" }),
+    );
+
+    await waitFor(() => expect(result.current.networkPassphraseMismatch).toBe(true));
+
+    const warning = result.current.networkPassphraseWarning;
+    expect(warning).not.toBeNull();
+    expect(warning).toMatch(/PUBLIC/i);
+    expect(warning).toMatch(/Test SDF Network ; September 2015/);
+    // Recovery instruction — the whole point of surfacing the warning.
+    expect(warning?.toLowerCase()).toContain("switch");
+  });
 });
 
 describe("useFreighter — connect()", () => {

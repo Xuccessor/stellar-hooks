@@ -4,7 +4,7 @@ Connect to and interact with the [Freighter](https://freighter.app) browser exte
 
 ## Overview
 
-`useFreighter` manages wallet connection state, handles account and network switches automatically, and provides methods for signing transactions, auth entries, and arbitrary data blobs.
+`useFreighter` manages wallet connection state, handles account and network switches automatically, provides methods for signing transactions, auth entries, and arbitrary data blobs, and detects when the wallet is on a different network than your dApp expects so a wrong-ledger sign can't happen silently.
 
 ## Import
 
@@ -14,7 +14,15 @@ import { useFreighter } from "stellar-hooks";
 
 ## Parameters
 
-None. This hook takes no parameters.
+The hook accepts an optional options object.
+
+```ts
+useFreighter(options?: UseFreighterOptions)
+```
+
+| Option | Type | Description |
+|---|---|---|
+| `expectedNetworkPassphrase` | `string` | The network passphrase your dApp expects (e.g. `"Test SDF Network ; September 2015"`). When the connected wallet is on a different network, the hook reports a mismatch on `networkPassphraseMismatch` and produces an actionable message on `networkPassphraseWarning`. If you omit this option but render `<StellarProvider network="testnet">` (or another preset) higher in the tree, the provider's passphrase is used as the expectation automatically. |
 
 ## Return Value
 
@@ -25,6 +33,8 @@ None. This hook takes no parameters.
 | `publicKey` | `string \| null` | The connected account's public key (G... address), or null if not connected |
 | `network` | `string \| null` | The network the wallet is currently on (e.g. `"TESTNET"`, `"PUBLIC"`) |
 | `networkPassphrase` | `string \| null` | The wallet's current network passphrase |
+| `networkPassphraseMismatch` | `boolean` | `true` when the wallet's passphrase differs from the `expectedNetworkPassphrase` (option or provider). `false` when they match, the hook isn't connected, or no expectation is available. |
+| `networkPassphraseWarning` | `string \| null` | When `networkPassphraseMismatch` is `true`, an actionable message naming both networks and how to resolve it. `null` otherwise. |
 | `isLoading` | `boolean` | Whether the hook is currently checking connection status or performing an action |
 | `error` | `Error \| null` | Any error that occurred during connection or signing |
 | `connect` | `() => Promise<void>` | Request wallet access from the user. Opens Freighter permission dialog. |
@@ -91,6 +101,38 @@ function WalletButton() {
   );
 }
 ```
+
+## Network Mismatch Detection
+
+When the connected wallet is on a different Stellar network than your dApp expects, signing operations would silently target the wrong ledger and fail (or worse, succeed against an unintended chain). `useFreighter` exposes a typed detector so you can render a guard banner, gate signing behind an explicit acknowledgement, or otherwise prevent the user from submitting a transaction against the wrong network.
+
+```tsx
+import { useFreighter } from "stellar-hooks";
+
+function NetworkMismatchGuard() {
+  const {
+    network,                   // e.g. "TESTNET" or "PUBLIC" reported by Freighter
+    networkPassphrase,         // the wallet's current passphrase
+    networkPassphraseMismatch, // true when the wallet is on a different network than your dApp expects
+    networkPassphraseWarning,  // string | null — actionable warning text when there's a mismatch
+    isConnected,
+  } = useFreighter({
+    expectedNetworkPassphrase: "Test SDF Network ; September 2015",
+  });
+
+  if (!isConnected || !networkPassphraseMismatch) return null;
+
+  return (
+    <div role="alert" style={{ background: "#fee", padding: 12 }}>
+      {networkPassphraseWarning}
+    </div>
+  );
+}
+```
+
+If you wrap your app in `<StellarProvider network="testnet">` (or any preset), the expected passphrase comes from the provider automatically and you do not need to pass `expectedNetworkPassphrase` explicitly.
+
+`networkPassphraseWarning` is `null` whenever `networkPassphraseMismatch` is `false`, so a short-circuit render like `{networkPassphraseMismatch && <Banner message={networkPassphraseWarning!} />}` is safe.
 
 ## Signing Examples
 
@@ -160,12 +202,22 @@ function SignMessage() {
 ## Type Definitions
 
 ```ts
+interface UseFreighterOptions {
+  /**
+   * The Stellar network passphrase this dApp expects. If omitted, the
+   * passphrase is read from the surrounding <StellarProvider> config.
+   */
+  expectedNetworkPassphrase?: string;
+}
+
 interface UseFreighterReturn {
   isInstalled: boolean;
   isConnected: boolean;
   publicKey: string | null;
   network: string | null;
   networkPassphrase: string | null;
+  networkPassphraseMismatch: boolean;
+  networkPassphraseWarning: string | null;
   isLoading: boolean;
   error: Error | null;
   connect: () => Promise<void>;

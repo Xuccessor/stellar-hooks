@@ -124,11 +124,13 @@ Connect to and interact with the [Freighter](https://freighter.app) browser exte
 
 ```ts
 const {
-  isInstalled,       // boolean — is Freighter installed?
-  isConnected,       // boolean — has the user granted access?
-  publicKey,         // string | null
-  network,           // string | null  e.g. "TESTNET"
-  networkPassphrase, // string | null
+  isInstalled,             // boolean — is Freighter installed?
+  isConnected,             // boolean — has the user granted access?
+  publicKey,               // string | null
+  network,                 // string | null  e.g. "TESTNET"
+  networkPassphrase,       // string | null
+  networkPassphraseMismatch, // boolean — true when wallet network differs from `expectedNetworkPassphrase` (or the <StellarProvider> network)
+  networkPassphraseWarning,  // string | null — actionable warning text on mismatch; null otherwise
   isLoading,
   error,
 
@@ -139,6 +141,21 @@ const {
   signBlob,          // (blob: string, opts?) => Promise<string>  — wraps signMessage
 } = useFreighter();
 ```
+
+#### Network mismatch detection
+
+If the wallet is on a different Stellar network than your dApp expects, signing would silently target the wrong ledger. The hook accepts an optional `expectedNetworkPassphrase`:
+
+```ts
+const { networkPassphraseMismatch, networkPassphraseWarning } = useFreighter({
+  expectedNetworkPassphrase: "Test SDF Network ; September 2015",
+});
+
+// Or, if your app is wrapped in <StellarProvider network="testnet">, the
+// expected passphrase is taken from the provider automatically.
+```
+
+Render `networkPassphraseWarning` to surface the issue, or gate signing behind an acknowledgement. See the [API reference](./docs/api/hooks/use-freighter.md) for a full example.
 
 ---
 
