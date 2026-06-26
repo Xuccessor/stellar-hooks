@@ -64,25 +64,63 @@ export function App() {
 
 ## Hooks
 
-### `useNetwork()`
+Every hook listed below is implemented and exported from the package entry point. Hooks with a ↓ link have an expanded reference further down this page.
 
-Read the active network configuration and switch networks at runtime from anywhere inside `<StellarProvider>`.
+#### Wallet & connection
+
+| Hook | Description |
+|------|-------------|
+| [`useFreighter()`](#usefreighter) ↓ | Connect to the [Freighter](https://freighter.app) extension (`@stellar/freighter-api` v6); sign transactions, auth entries, and messages. |
+| `useWalletsKit()` | Multi-wallet adapter via [`@creit-tech/stellar-wallets-kit`](https://github.com/Creit-Tech/Stellar-Wallets-Kit) (Freighter, xBull, Albedo, Lobstr, WalletConnect, …). |
+| `useWalletConnect()` | WalletConnect v2 adapter for Stellar / Freighter Mobile. |
+| [`useNetwork()`](#usenetwork) ↓ | Read the active network configuration and switch networks at runtime. |
+
+#### Account & ledger data (read)
+
+| Hook | Description |
+|------|-------------|
+| [`useStellarAccount()`](#usestellaraccountpublickey-options) ↓ | Fetch (and optionally poll) a full account from Horizon. |
+| [`useStellarBalance()`](#usestellarbalancepublickey-options) ↓ | XLM and per-asset balances (wrapper around `useStellarAccount`). |
+| `useSorobanTokenBalance()` | Read SAC (Stellar Asset Contract) token balances via Soroban RPC. |
+| [`useLedgerEntry()`](#useledgerentryledgerkey-options) ↓ | Read a raw Soroban ledger entry by its `xdr.LedgerKey`. |
+| `useOperations()` | Fetch operations for an account or transaction from Horizon. |
+| `useEffects()` | Stream account effects from Horizon. |
+| `useAssets()` | Fetch and list Stellar assets via Horizon. |
+| `useAssetMetadata()` | Fetch asset metadata from a domain's `stellar.toml`. |
+| `useStellarToml()` | Fetch and parse a domain's `stellar.toml`. |
+| `useStellarOffers()` | Fetch open offers for a Stellar account. |
+| `useOfferBook()` | Fetch the DEX order book for an asset pair. |
+| `useClaimableBalances()` | List claimable balances for an account. |
+
+#### Payments & operations (write)
+
+| Hook | Description |
+|------|-------------|
+| [`usePayment()`](#usepaymentoptions) ↓ | Build, sign, and submit a classic XLM / asset payment. |
+| `usePathPayment()` | Strict send / receive path payments. |
+| [`useTransaction()`](#usetransactionoptions) ↓ | Submit a pre-signed XDR and poll until confirmed (Soroban RPC or classic Horizon). |
+| `useTrade()` | Place, modify, and cancel Stellar DEX offers. |
+| `useTrustline()` | Add, remove, and modify trustlines. |
+| `useCreateAccount()` | Fund (via Friendbot) and create new accounts. |
+| `useAccountMerge()` | Build and submit an account merge. |
+| `useAccountFlags()` | Set and clear account auth flags. |
+| `useBumpSequence()` | Bump an account's sequence number. |
+| `useMultiSig()` | Build a multi-sig transaction, collect signatures, and submit once the threshold is met. |
+| `useInflation()` | Submit an inflation operation (legacy support). |
+| `useClaimBalance()` / `useCreateClaimableBalance()` | Claim and create claimable balances. |
+
+#### Soroban / contracts
+
+| Hook | Description |
+|------|-------------|
+| [`useSorobanContract()`](#usesorobancontractoptions) ↓ | Simulate → sign → submit → poll a Soroban contract call in one hook. |
+| [`useLedgerEntry()`](#useledgerentryledgerkey-options) ↓ | Read a raw Soroban ledger entry without constructing a contract call. |
+
+---
 
 ### `useFreighter()`
 
-Connect to and interact with the [Freighter](https://freighter.app) browser extension wallet, including arbitrary data signing via `signBlob`.
-
-### `useStellarAccount(publicKey)`
-
-Fetch and subscribe to a Stellar account's data, including balances, sequence number, and thresholds.
-
-### `useSorobanContract(options)`
-
-Invoke a Soroban smart-contract method. Handles simulation, auth, submission, and status polling in one hook.
-
-### `useTransaction(options)`
-
-Submit a pre-signed transaction XDR and poll until it is confirmed. Works with both Soroban (RPC) and classic Stellar (Horizon) transactions.
+Connect to and interact with the [Freighter](https://freighter.app) browser extension wallet. Built on **`@stellar/freighter-api` v6** — `signBlob` is implemented on top of Freighter's `signMessage` API.
 
 ```ts
 const {
@@ -98,7 +136,7 @@ const {
   disconnect,        // () => void
   signTransaction,   // (xdr: string, opts?) => Promise<string>
   signAuthEntry,     // (entryPreimageXdr: string) => Promise<string>
-  signBlob,          // (blob: string, opts?) => Promise<string>
+  signBlob,          // (blob: string, opts?) => Promise<string>  — wraps signMessage
 } = useFreighter();
 ```
 
@@ -405,7 +443,7 @@ import type {
 | react | ≥ 18 |
 | react-dom | ≥ 18 |
 
-The library ships with `@stellar/stellar-sdk` v13 and `@stellar/freighter-api` v2 as direct dependencies — you don't need to install them separately unless you need a different version.
+The library ships with `@stellar/stellar-sdk` v13 and `@stellar/freighter-api` v6 as direct dependencies — you don't need to install them separately unless you need a different version.
 
 ---
 
@@ -448,13 +486,11 @@ This repository uses Changesets for automated changelog generation, version bump
 
 ## Roadmap
 
-- [x] `usePayment()` — send XLM / SAT payments with one hook
+- [x] `usePayment()` — send XLM / asset payments with one hook
 - [x] `useClaimableBalance()` — list and claim claimable balances
-- [x] `useContractEvents()` — subscribe to Soroban contract events via streaming
 - [x] `usePathPayment()` — strict send / receive path payment hook
-- [ ] `useStellarToml()` — fetch and parse a domain's `stellar.toml`
 - [x] `useStellarToml()` — fetch and parse a domain's `stellar.toml`
-- [ ] React Query / SWR adapter (optional peer dependency)
+- [x] React Query / SWR adapters — `@stellar-hooks/query` and `@stellar-hooks/swr`
 
 ---
 
