@@ -5,12 +5,47 @@
  * @license MIT
  */
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { getHorizonServer } from "../utils/memoizedServers";
 import { useStellarContext } from "../context";
 import type { StellarAccountData, StellarPublicKey } from "../types";
 import { parseAccountResponse, validatePublicKey } from "../utils";
-import { useStellarQuery } from "./useStellarQuery";
+
+// ─── State ──────────────────────────────────────────────────────────────────
+
+interface AccountState {
+  data: StellarAccountData | null;
+  isLoading: boolean;
+  isRefetching: boolean;
+  error: Error | null;
+  lastFetchedAt: Date | null;
+}
+
+type AccountAction =
+  | { type: "FETCH_START" }
+  | { type: "FETCH_SUCCESS"; payload: StellarAccountData | null }
+  | { type: "FETCH_ERROR"; payload: Error };
+
+function reducer(state: AccountState, action: AccountAction): AccountState {
+  switch (action.type) {
+    case "FETCH_START":
+      return { ...state, isLoading: state.data === null, isRefetching: state.data !== null, error: null };
+    case "FETCH_SUCCESS":
+      return { data: action.payload, isLoading: false, isRefetching: false, error: null, lastFetchedAt: new Date() };
+    case "FETCH_ERROR":
+      return { ...state, isLoading: false, isRefetching: false, error: action.payload };
+    default:
+      return state;
+  }
+}
+
+const initialState: AccountState = {
+  data: null,
+  isLoading: false,
+  isRefetching: false,
+  error: null,
+  lastFetchedAt: null,
+};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,7 +97,7 @@ export function useStellarAccount(
   // requestCache via context for proper scoping.
   const moduleFallbackCache = useRef<Map<string, Promise<unknown>> | null>(null);
   if (moduleFallbackCache.current === null) moduleFallbackCache.current = new Map();
-  const requestCache = (ctx as any).requestCache ?? moduleFallbackCache.current;
+  const requestCache = (ctx as unknown as { requestCache?: Map<string, Promise<unknown>> }).requestCache ?? moduleFallbackCache.current;
   const [state, dispatch] = useReducer(reducer, initialState);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isFetchingRef = useRef(false);
@@ -104,7 +139,7 @@ export function useStellarAccount(
       }
 
       const fetchPromise = (async () => {
-        const rawAccount = await server.loadAccount(publicKey, { signal } as any);
+        const rawAccount = await server.loadAccount(publicKey);
         return parseAccountResponse(rawAccount);
       })();
 
@@ -118,13 +153,14 @@ export function useStellarAccount(
       }
     } catch (err) {
       // Treat aborts as a silent cancellation — don't set error state.
-      if (err instanceof Error && (err.name === "AbortError" || (err as any).code === "ABORT_ERR")) {
+      if (err instanceof Error && (err.name === "AbortError" || (err as unknown as { code?: string }).code === "ABORT_ERR")) {
         return;
       }
       dispatch({ type: "FETCH_ERROR", payload: err instanceof Error ? err : new Error(String(err)) });
     } finally {
       isFetchingRef.current = false;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicKey, config.horizonUrl, deduplicate]);
 
   useEffect(() => {
@@ -143,34 +179,4 @@ export function useStellarAccount(
   }, [enabled, publicKey, refetchInterval, fetchAccount]);
 
   return { account: state.data, ...state, refetch: fetchAccount };
-  const { config } = useStellarContext();
-
-  const fetchAccount = useCallback(async () => {
-    if (!publicKey) return null;
-
-    validatePublicKey(publicKey);
-    const server = getHorizonServer(config.horizonUrl);
-    const rawAccount = await server.loadAccount(publicKey);
-    return parseAccountResponse(rawAccount);
-  }, [publicKey, config.horizonUrl]);
-
-  const state = useStellarQuery<StellarAccountData | null>(fetchAccount, {
-    enabled: enabled && Boolean(publicKey),
-    refetchInterval,
-    deduplicate,
-    initialData: null,
-  });
-
-  return useMemo(
-    () => ({
-      account: state.data,
-      data: state.data,
-      isLoading: state.isLoading,
-      isRefetching: state.isRefetching,
-      error: state.error,
-      lastFetchedAt: state.lastFetchedAt,
-      refetch: state.refetch,
-    }),
-    [state.data, state.isLoading, state.isRefetching, state.error, state.lastFetchedAt, state.refetch]
-  );
 }
