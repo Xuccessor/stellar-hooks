@@ -7,14 +7,17 @@
 import { useCallback, useReducer } from "react";
 import {
   Asset,
+  Claimant,
   Horizon,
   Operation,
   TransactionBuilder,
+  xdr,
 } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
-import { useTransaction } from "./useTransaction";
+import { useTransactionCore } from "./useTransactionCore";
 import { useFreighter } from "./useFreighter";
-import type { TransactionStatus } from "../types";
+import { unsafeAsXdrString, type TransactionStatus, type StellarTransactionError } from "../types";
+import { validatePublicKey } from "../utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +38,47 @@ export interface ClaimableBalancesState {
   isLoading: boolean;
   error: Error | null;
 }
+
+/**
+ * The asset to lock into a claimable balance.
+ * Use `{ type: "native" }` for XLM.
+ * Use `{ type: "credit", code: "USDC", issuer: "G..." }` for any other asset.
+ */
+export type ClaimableBalanceAsset =
+  | { type: "native" }
+  | { type: "credit"; code: string; issuer: string };
+
+/**
+ * A single claimant for a new claimable balance.
+ * If `predicate` is omitted the claimant may claim unconditionally.
+ */
+export interface ClaimantInput {
+  /** Account (G...) allowed to claim the balance */
+  destination: string;
+  /** Optional claim predicate. Defaults to unconditional. */
+  predicate?: xdr.ClaimPredicate;
+}
+
+/** Parameters for creating a claimable balance. */
+export interface CreateClaimableBalanceParams {
+  /** Asset to lock into the balance */
+  asset: ClaimableBalanceAsset;
+  /** Amount as a string, e.g. "10.5" */
+  amount: string;
+  /** Accounts eligible to claim the balance */
+  claimants: ClaimantInput[];
+}
+
+/** Shared callbacks for the claimable-balance write hooks. */
+export interface UseClaimBalanceOptions {
+  /** Callback fired when the transaction is successfully confirmed. */
+  onSuccess?: (hash: string) => void;
+  /** Callback fired when the transaction fails or an error occurs. */
+  onError?: (error: StellarTransactionError) => void;
+}
+
+/** Options for {@link useCreateClaimableBalance}. */
+export type UseCreateClaimableBalanceOptions = UseClaimBalanceOptions;
 
 /**
  * @example
@@ -70,11 +114,16 @@ export interface UseClaimableBalancesReturn extends ClaimableBalancesState {
  * return <button onClick={() => claim(balance.id)}>Claim</button>;
  * ```
  */
+export interface UseClaimBalanceOptions {
+  onSuccess?: (hash: string) => void;
+  onError?: (error: StellarTransactionError) => void;
+}
+
 export interface UseClaimBalanceReturn {
   claim: (balanceId: string) => Promise<void>;
   status: TransactionStatus;
   hash: string | null;
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;
@@ -133,6 +182,7 @@ export function useClaimableBalances(
     dispatch({ type: "LOADING" });
 
     try {
+      validatePublicKey(publicKey);
       const server = new Horizon.Server(config.horizonUrl);
       const response = await server
         .claimableBalances()
@@ -186,7 +236,7 @@ export function useClaimBalance(
   const { onSuccess, onError } = options;
   const { config } = useStellarContext();
   const { signTransaction, publicKey } = useFreighter();
-  const { submit: submitXdr, reset, ...txState } = useTransaction({
+  const { submit: submitXdr, reset, ...txState } = useTransactionCore({
     mode: "classic",
     ...(onSuccess && { onSuccess }),
     ...(onError && { onError }),
@@ -216,7 +266,7 @@ export function useClaimBalance(
       const builtXdr = tx.toXDR();
 
       // 3. Sign via Freighter
-      const signedXdr = await signTransaction(builtXdr, {
+      const signedXdr = await signTransaction(unsafeAsXdrString(builtXdr), {
         networkPassphrase: config.networkPassphrase,
       });
 
@@ -228,6 +278,150 @@ export function useClaimBalance(
 
   return {
     claim,
+    reset,
+    status: txState.status,
+    hash: txState.hash,
+    error: txState.error,
+    isLoading: txState.isLoading,
+    isSuccess: txState.isSuccess,
+    isError: txState.isError,
+  };
+}
+
+// ─── useCreateClaimableBalance ─────────────────────────────────────────────────
+
+/**
+ * @example
+ * ```tsx
+ * const {
+ *   create,    // (params: CreateClaimableBalanceParams) => Promise<void>
+ *   status,    // "idle" | "submitting" | "polling" | "success" | "error"
+ *   hash,      // string | null
+ *   isLoading, // boolean
+ *   isSuccess, // boolean
+ *   isError,   // boolean
+ *   error,     // Error | null
+ *   reset,     // () => void
+ * } = useCreateClaimableBalance();
+ *
+ * return (
+ *   <button
+ *     onClick={() =>
+ *       create({
+ *         asset: { type: "native" },
+ *         amount: "10",
+ *         claimants: [{ destination: "GBXXX..." }],
+ *       })
+ *     }
+ *   >
+ *     Create
+ *   </button>
+ * );
+ * ```
+ */
+export interface UseCreateClaimableBalanceReturn {
+  create: (params: CreateClaimableBalanceParams) => Promise<void>;
+  status: TransactionStatus;
+  hash: string | null;
+  error: StellarTransactionError | null;
+  isLoading: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  reset: () => void;
+}
+
+/**
+ * Builds, signs via Freighter, and submits a `createClaimableBalance` operation.
+ * Locks an asset amount so the listed claimants can later claim it (subject to
+ * each claimant's predicate). Uses `useTransaction({ mode: "classic" })` for
+ * submission and polling.
+ *
+ * Claimants without an explicit `predicate` may claim unconditionally.
+ *
+ * @example
+ * ```tsx
+ * const { create, status, hash, error } = useCreateClaimableBalance({
+ *   onSuccess: (hash) => console.log("Created!", hash),
+ * });
+ *
+ * await create({
+ *   asset: { type: "native" },
+ *   amount: "10",
+ *   claimants: [{ destination: "GBXXX..." }],
+ * });
+ * ```
+ */
+export function useCreateClaimableBalance(
+  options: UseCreateClaimableBalanceOptions = {}
+): UseCreateClaimableBalanceReturn {
+  const { onSuccess, onError } = options;
+  const { config } = useStellarContext();
+  const { signTransaction, publicKey } = useFreighter();
+  const { submit: submitXdr, reset, ...txState } = useTransactionCore({
+    mode: "classic",
+    ...(onSuccess && { onSuccess }),
+    ...(onError && { onError }),
+  });
+
+  const create = useCallback(
+    async ({ asset, amount, claimants }: CreateClaimableBalanceParams) => {
+      if (!publicKey) {
+        throw new Error("Freighter is not connected. Call connect() first.");
+      }
+
+      if (claimants.length === 0) {
+        throw new Error("At least one claimant is required.");
+      }
+
+      // 1. Load source account for sequence number
+      const server = new Horizon.Server(config.horizonUrl);
+      const sourceAccount = await server.loadAccount(publicKey);
+
+      // 2. Resolve the asset
+      const stellarAsset =
+        asset.type === "native"
+          ? Asset.native()
+          : new Asset(asset.code, asset.issuer);
+
+      // 3. Resolve claimants, defaulting to an unconditional predicate
+      const stellarClaimants = claimants.map(
+        (c) =>
+          new Claimant(
+            c.destination,
+            c.predicate ?? Claimant.predicateUnconditional()
+          )
+      );
+
+      // 4. Build the transaction
+      const tx = new TransactionBuilder(sourceAccount, {
+        fee: "100",
+        networkPassphrase: config.networkPassphrase,
+      })
+        .addOperation(
+          Operation.createClaimableBalance({
+            asset: stellarAsset,
+            amount,
+            claimants: stellarClaimants,
+          })
+        )
+        .setTimeout(60)
+        .build();
+
+      const builtXdr = tx.toXDR();
+
+      // 5. Sign via Freighter
+      const signedXdr = await signTransaction(unsafeAsXdrString(builtXdr), {
+        networkPassphrase: config.networkPassphrase,
+      });
+
+      // 6. Submit and poll via useTransaction internals
+      await submitXdr(signedXdr);
+    },
+    [publicKey, config, signTransaction, submitXdr]
+  );
+
+  return {
+    create,
     reset,
     status: txState.status,
     hash: txState.hash,

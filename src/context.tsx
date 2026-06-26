@@ -37,6 +37,7 @@ export function StellarProvider({
   const [customConfig, setCustomConfig] = useState<CustomNetworkConfig | null>(
     initialCustomConfig || null
   );
+  const requestCache = useMemo(() => new Map<string, Promise<unknown>>(), []);
 
   useEffect(() => {
     const savedNetwork = localStorage.getItem(NETWORK_STORAGE_KEY) as StellarNetwork;
@@ -46,7 +47,7 @@ export function StellarProvider({
     if (savedCustomConfig) {
       try {
         setCustomConfig(JSON.parse(savedCustomConfig));
-      } catch {}
+      } catch { /* ignore invalid JSON in localStorage */ }
     }
   }, []);
 
@@ -68,13 +69,20 @@ export function StellarProvider({
   }, [network, customConfig]);
 
   const value = useMemo<StellarContextInternalValue>(
-    () => ({ config, network, switchNetwork }),
-    [config, network, switchNetwork]
+    () => ({ config, network, switchNetwork, requestCache }),
+    [config, network, switchNetwork, requestCache]
   );
 
   return (
     <StellarContext.Provider value={value}>{children}</StellarContext.Provider>
   );
+}
+
+/**
+ * Optional context reader — returns null when rendered outside {@link StellarProvider}.
+ */
+export function useOptionalStellarContext(): StellarContextInternalValue | null {
+  return useContext(StellarContext);
 }
 
 /**

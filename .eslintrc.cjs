@@ -1,8 +1,12 @@
 module.exports = {
   root: true,
   parser: "@typescript-eslint/parser",
-  plugins: ["@typescript-eslint"],
-  extends: ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  plugins: ["@typescript-eslint", "react-hooks"],
+  extends: [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react-hooks/recommended",
+  ],
   env: {
     browser: true,
     es2022: true,
@@ -11,4 +15,20 @@ module.exports = {
     ecmaVersion: "latest",
     sourceType: "module",
   },
+  overrides: [
+    {
+      files: [
+        "**/__tests__/**",
+        "**/__mocks__/**",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.test-d.ts",
+      ],
+      rules: {
+        "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/no-unused-vars": "off",
+        "react-hooks/rules-of-hooks": "off",
+      },
+    },
+  ],
 };

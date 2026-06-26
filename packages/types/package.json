@@ -1,0 +1,46 @@
+{
+  "name": "@types/stellar-hooks",
+  "version": "0.1.0",
+  "description": "Declaration-only package for stellar-hooks.",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "stellar",
+    "soroban",
+    "react",
+    "hooks",
+    "typescript",
+    "types"
+  ],
+  "author": "stellar-hooks contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dark-princezz/stellar-hooks.git",
+    "directory": "packages/types"
+  },
+  "peerDependencies": {
+    "@stellar/freighter-api": "^6.0.1",
+    "@stellar/stellar-sdk": "^13.0.0",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@stellar/freighter-api": "^6.0.1",
+    "@stellar/stellar-sdk": "^13.0.0",
+    "@types/react": "^18.3.0",
+    "typescript": "^5.9.0"
+  }
+}

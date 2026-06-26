@@ -17,11 +17,7 @@ vi.mock("../context", () => ({
   }),
 }));
 
-const loadAccountMock = vi.fn(async () => ({
-  account_id: "GTEST",
-  sequence: "1",
-  balances: [],
-}));
+const loadAccountMock = vi.fn();
 
 vi.mock("@stellar/stellar-sdk", () => ({
   Horizon: {
@@ -29,16 +25,22 @@ vi.mock("@stellar/stellar-sdk", () => ({
       loadAccount: loadAccountMock,
     })),
   },
+  StrKey: { isValidEd25519PublicKey: vi.fn().mockReturnValue(true) },
 }));
+
+const MOCK_ACCOUNT = { account_id: "GTEST", sequence: "1", balances: [] };
+const NEVER_RESOLVE = () => new Promise<typeof MOCK_ACCOUNT>(() => { /* never resolves */ });
 
 function HookHarness({
   publicKey,
   refetchInterval,
+  deduplicate,
 }: {
   publicKey: string;
   refetchInterval: number;
+  deduplicate?: boolean;
 }) {
-  const { refetch } = useStellarAccount(publicKey, { refetchInterval });
+  const { refetch } = useStellarAccount(publicKey, { refetchInterval, deduplicate });
 
   useEffect(() => {
     void refetch();
@@ -58,6 +60,8 @@ describe("useStellarAccount polling cleanup", () => {
   });
 
   it("clears polling interval on unmount when refetchInterval > 0", async () => {
+    loadAccountMock.mockResolvedValue(MOCK_ACCOUNT);
+
     let renderer: TestRenderer.ReactTestRenderer;
 
     await act(async () => {
@@ -78,5 +82,42 @@ describe("useStellarAccount polling cleanup", () => {
 
     expect(loadAccountMock.mock.calls.length).toBe(callsBeforeUnmount);
   });
-});
 
+  it("deduplicates: skips poll ticks while a fetch is in-flight (deduplicate: true)", async () => {
+    loadAccountMock.mockImplementation(NEVER_RESOLVE);
+
+    await act(async () => {
+      TestRenderer.create(
+        <HookHarness publicKey="GABC" refetchInterval={50} deduplicate={true} />
+      );
+    });
+
+    const callsAfterMount = loadAccountMock.mock.calls.length;
+
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+
+    // All poll ticks skipped — first fetch still in-flight
+    expect(loadAccountMock.mock.calls.length).toBe(callsAfterMount);
+  });
+
+  it("allows overlapping requests when deduplicate: false", async () => {
+    loadAccountMock.mockImplementation(NEVER_RESOLVE);
+
+    await act(async () => {
+      TestRenderer.create(
+        <HookHarness publicKey="GABC" refetchInterval={50} deduplicate={false} />
+      );
+    });
+
+    const callsAfterMount = loadAccountMock.mock.calls.length;
+
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+
+    // Poll ticks fire new requests even while one is in-flight
+    expect(loadAccountMock.mock.calls.length).toBeGreaterThan(callsAfterMount);
+  });
+});

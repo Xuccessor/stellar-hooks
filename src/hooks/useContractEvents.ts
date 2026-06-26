@@ -6,8 +6,9 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { rpc } from "@stellar/stellar-sdk";
+import * as rpc from "@stellar/stellar-sdk/rpc";
 import { useStellarContext } from "../context";
+import { validateContractId } from "../utils";
 
 export interface UseContractEventsOptions {
   /** Soroban contract address (C...) */
@@ -48,6 +49,20 @@ function reducer(state: EventsState, action: Action): EventsState {
   }
 }
 
+/**
+ * Poll or stream Soroban contract events from the RPC endpoint.
+ *
+ * @example
+ * ```tsx
+ * const { events, isLoading, error, refetch } = useContractEvents({
+ *   contractId: "CABC...XYZ",
+ *   startLedger: 100000,
+ *   refetchInterval: 5000,
+ * });
+ *
+ * return events.map((e) => <p key={e.id}>{JSON.stringify(e.value)}</p>);
+ * ```
+ */
 export function useContractEvents(options: UseContractEventsOptions) {
   const { config } = useStellarContext();
   const [state, dispatch] = useReducer(reducer, {
@@ -61,27 +76,27 @@ export function useContractEvents(options: UseContractEventsOptions) {
 
   const fetchEvents = useCallback(async () => {
     try {
+      validateContractId(options.contractId);
       dispatch({ type: "LOADING" });
       const server = new rpc.Server(config.sorobanRpcUrl);
       
       const filter: rpc.Api.EventFilter = {
         type: options.type || "contract",
         contractIds: [options.contractId],
-        topics: options.topics,
+        ...(options.topics !== undefined && { topics: options.topics }),
       };
 
       const response = await server.getEvents({
-        startLedger: options.startLedger,
+        ...(options.startLedger !== undefined && { startLedger: options.startLedger }),
+        ...(cursorRef.current !== undefined && { cursor: cursorRef.current }),
         filters: [filter],
-        pagination: {
-          cursor: cursorRef.current,
-          limit: options.limit || 100,
-        }
+        limit: options.limit ?? 100,
       });
 
       if (isMounted.current && response.events) {
         if (response.events.length > 0) {
-          cursorRef.current = response.events[response.events.length - 1].pagingToken;
+          const lastEvent = response.events[response.events.length - 1];
+          if (lastEvent) cursorRef.current = lastEvent.pagingToken;
         }
         dispatch({ type: "SUCCESS", payload: response.events });
       }

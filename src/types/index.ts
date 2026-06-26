@@ -5,14 +5,37 @@
  * @license MIT
  */
 
-import type { Horizon, rpc } from "@stellar/stellar-sdk";
+import type { Horizon, xdr } from "@stellar/stellar-sdk";
+import type * as rpc from "@stellar/stellar-sdk/rpc";
 
 // ─── Network ──────────────────────────────────────────────────────────────────
 
+/**
+ * Identifies the Stellar network to connect to.
+ *
+ * @example
+ * ```ts
+ * const network: StellarNetwork = "testnet";
+ * switchNetwork("mainnet");
+ * ```
+ */
 export type StellarNetwork = "mainnet" | "testnet" | "futurenet" | "custom";
 
-export interface NetworkConfig {
-  network: StellarNetwork;
+/**
+ * Endpoint configuration for a Stellar network preset.
+ *
+ * @example
+ * ```ts
+ * const config: NetworkConfig = NETWORK_CONFIGS.testnet;
+ * console.log(config.horizonUrl); // "https://horizon-testnet.stellar.org"
+ * ```
+ */
+/**
+ * Network configuration for a non-custom (preset) network.
+ * This is kept separate so `custom` configs remain discriminated.
+ */
+export interface PresetNetworkConfig {
+  network: Exclude<StellarNetwork, "custom">;
   /** Horizon REST API endpoint */
   horizonUrl: string;
   /** Soroban RPC endpoint */
@@ -20,6 +43,48 @@ export interface NetworkConfig {
   /** Network passphrase */
   networkPassphrase: string;
 }
+
+/**
+ * Union of preset or custom network configuration. When `network === "custom"`
+ * the `CustomNetworkConfig` shape is enforced by the discriminant.
+ */
+export type NetworkConfig = PresetNetworkConfig | CustomNetworkConfig;
+
+import {
+  type StellarPublicKey,
+  type StellarContractId,
+  type StellarXdrString,
+  type StellarTxHash,
+  type StellarAssetIssuer,
+  asPublicKey,
+  asContractId,
+  asXdrString,
+  asTxHash,
+  asAssetIssuer,
+  unsafeAsPublicKey,
+  unsafeAsContractId,
+  unsafeAsXdrString,
+  unsafeAsTxHash,
+  unsafeAsAssetIssuer,
+} from "./branded";
+
+export {
+  type StellarPublicKey,
+  type StellarContractId,
+  type StellarXdrString,
+  type StellarTxHash,
+  type StellarAssetIssuer,
+  asPublicKey,
+  asContractId,
+  asXdrString,
+  asTxHash,
+  asAssetIssuer,
+  unsafeAsPublicKey,
+  unsafeAsContractId,
+  unsafeAsXdrString,
+  unsafeAsTxHash,
+  unsafeAsAssetIssuer,
+};
 
 /**
  * Endpoint configuration for a private or self-hosted Stellar network.
@@ -85,8 +150,18 @@ export const NETWORK_CONFIGS: Record<Exclude<StellarNetwork, "custom">, NetworkC
 
 // ─── Account ──────────────────────────────────────────────────────────────────
 
+/**
+ * Parsed Stellar account data returned by `useStellarAccount`.
+ *
+ * @example
+ * ```ts
+ * const { account } = useStellarAccount(publicKey);
+ * console.log(account?.sequence);       // "12345678"
+ * console.log(account?.balances[0].balance); // "100.0000000"
+ * ```
+ */
 export interface StellarAccountData {
-  accountId: string;
+  accountId: StellarPublicKey;
   balances: StellarBalance[];
   sequence: string;
   subentryCount: number;
@@ -106,10 +181,23 @@ export interface StellarAccountData {
   raw: Horizon.AccountResponse;
 }
 
+/**
+ * A single balance entry from a Stellar account.
+ *
+ * @example
+ * ```ts
+ * const { xlmBalance } = useStellarBalance(publicKey);
+ * if (xlmBalance) {
+ *   console.log(xlmBalance.balance);      // "100.0000000"
+ *   console.log(xlmBalance.balanceFloat); // 100
+ *   console.log(xlmBalance.isNative);     // true
+ * }
+ * ```
+ */
 export interface StellarBalance {
   assetType: string;
   assetCode?: string;
-  assetIssuer?: string;
+  assetIssuer?: StellarAssetIssuer;
   balance: string;
   /** Parsed as a float for convenience */
   balanceFloat: number;
@@ -121,21 +209,44 @@ export interface StellarBalance {
 
 // ─── Wallet / Freighter ───────────────────────────────────────────────────────
 
+/**
+ * State snapshot of the Freighter browser extension wallet.
+ *
+ * @example
+ * ```ts
+ * const { isInstalled, isConnected, publicKey } = useFreighter();
+ * if (!isInstalled) return <p>Install Freighter</p>;
+ * if (!isConnected) return <button onClick={connect}>Connect</button>;
+ * return <p>{publicKey}</p>;
+ * ```
+ */
 export interface FreighterState {
   isInstalled: boolean;
   isConnected: boolean;
-  publicKey: string | null;
+  publicKey: StellarPublicKey | null;
   network: string | null;
   networkPassphrase: string | null;
+  /** True when Freighter's network passphrase differs from the app's expected network. */
+  networkPassphraseMismatch: boolean;
+  /** Actionable warning when {@link networkPassphraseMismatch} is true; otherwise null. */
+  networkPassphraseWarning: string | null;
   isLoading: boolean;
   error: Error | null;
+}
+
+export interface UseFreighterOptions {
+  /**
+   * Expected Stellar network passphrase for this dApp.
+   * Defaults to the {@link StellarProvider} config when the hook runs inside the provider.
+   */
+  expectedNetworkPassphrase?: string;
 }
 
 export interface UseFreighterReturn extends FreighterState {
   connect: () => Promise<void>;
   disconnect: () => void;
-  signTransaction: (xdr: string, opts?: SignTransactionOptions) => Promise<string>;
-  signAuthEntry: (entryPreimageXdr: string) => Promise<string>;
+  signTransaction: (xdr: StellarXdrString, opts?: SignTransactionOptions) => Promise<StellarXdrString>;
+  signAuthEntry: (entryPreimageXdr: StellarXdrString) => Promise<StellarXdrString>;
   signBlob: (blob: string, opts?: { accountToSign?: string }) => Promise<string>;
 }
 
@@ -148,6 +259,49 @@ export interface SignTransactionOptions {
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
 
+/**
+ * Distinguishes between different categories of transaction errors.
+ * Consumers can now differentiate network failures from on-chain transaction failures.
+ *
+ * @example
+ * ```ts
+ * const { error } = useTransaction(...);
+ * if (error?.type === 'network') {
+ *   console.error("Network issue:", error.message);
+ * } else if (error?.type === 'transaction') {
+ *   console.error("On-chain failure:", error.resultCode);
+ * }
+ * ```
+ */
+export type StellarTransactionError =
+  | {
+      /** Request never reached the network */
+      type: 'network';
+      message: string;
+    }
+  | {
+      /** Transaction submitted but failed on-chain */
+      type: 'transaction';
+      /** Stellar result code (e.g., "op_underfunded", "tx_bad_seq") */
+      resultCode: string;
+      message: string;
+    }
+  | {
+      /** Operation timed out before completing */
+      type: 'timeout';
+      message: string;
+    };
+
+/**
+ * Lifecycle stages of a Stellar transaction submission.
+ *
+ * @example
+ * ```ts
+ * const { status } = useSorobanContract("C...", { method: "increment" });
+ * // "idle" → "building" → "signing" → "submitting" → "polling" → "success" | "error"
+ * const isInFlight = status !== "idle" && status !== "success" && status !== "error";
+ * ```
+ */
 export type TransactionStatus =
   | "idle"
   | "building"
@@ -157,11 +311,22 @@ export type TransactionStatus =
   | "success"
   | "error";
 
+/**
+ * Generic transaction state shared by all transactional hooks.
+ *
+ * @example
+ * ```ts
+ * const { status, hash, result, error, isLoading, isSuccess, isError } = useSorobanContract(...);
+ * if (isSuccess) console.log("tx hash:", hash);
+ * if (isError && error?.type === 'network') console.error("Network error");
+ * if (isError && error?.type === 'transaction') console.error("On-chain failure:", error.resultCode);
+ * ```
+ */
 export interface TransactionState<TResult = unknown> {
   status: TransactionStatus;
-  hash: string | null;
+  hash: StellarTxHash | null;
   result: TResult | null;
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;
@@ -169,11 +334,11 @@ export interface TransactionState<TResult = unknown> {
 
 // ─── Soroban Contract ─────────────────────────────────────────────────────────
 
-export interface ContractCallOptions<TResult = any> {
+export interface ContractCallOptions<TResult = unknown> {
   /** Soroban contract address (C...) */
-  contractId: string;
+  contractId: StellarContractId;
   method: string;
-  args?: unknown[];
+  args?: xdr.ScVal[];
   /** Fee in stroops. Defaults to 100 */
   fee?: number;
   /** Timeout in seconds. Defaults to 30 */
@@ -183,12 +348,12 @@ export interface ContractCallOptions<TResult = any> {
   /** Callback fired when the transaction is successfully confirmed. */
   onSuccess?: (result: TResult) => void;
   /** Callback fired when the transaction fails or an error occurs. */
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
   /**
    * Optional function to parse the raw xdr.ScVal result to your desired TResult type.
    * If not provided, the raw xdr.ScVal is returned (or tx hash as fallback).
    */
-  parseResult?: (scVal: any) => TResult;
+  parseResult?: (scVal: xdr.ScVal) => TResult;
 }
 
 export interface UseContractCallReturn<TResult = unknown>
@@ -243,6 +408,103 @@ export interface StellarProviderProps {
 export interface StellarContextValue {
   config: NetworkConfig;
   network: StellarNetwork;
+  /** Provider-scoped in-memory map for deduplicating in-flight requests. */
+  requestCache: Map<string, Promise<unknown>>;
+}
+
+// ─── Stellar Wallets Kit ──────────────────────────────────────────────────────
+
+/** Init params forwarded to StellarWalletsKit.init(). */
+export interface WalletsKitOptions {
+  /** List of wallet modules to support. Pass `defaultModules()` for all built-in wallets. */
+  modules: unknown[];
+  /** Pre-select a wallet by its ID (e.g. "freighter"). */
+  selectedWalletId?: string;
+  /** Stellar network passphrase. Defaults to the StellarProvider network. */
+  network?: string;
+}
+
+export interface WalletsKitState {
+  /** Active wallet public key, null when not connected. */
+  publicKey: string | null;
+  /** Whether an address is currently connected. */
+  isConnected: boolean;
+  /** True while the connect (authModal) call is in-flight. */
+  isConnecting: boolean;
+  error: Error | null;
+}
+
+export interface UseWalletsKitReturn extends WalletsKitState {
+  /**
+   * Open the Stellar Wallets Kit auth modal so the user can pick a wallet.
+   * Resolves with the connected address on success.
+   */
+  connect: () => Promise<string | null>;
+  /** Clear the active address (does not call any wallet SDK disconnect). */
+  disconnect: () => void;
+  /** Sign a transaction XDR with the active wallet. */
+  signTransaction: (
+    xdr: string,
+    opts?: { networkPassphrase?: string; address?: string }
+  ) => Promise<string>;
+  /** Sign a Soroban auth entry with the active wallet. */
+  signAuthEntry: (
+    authEntry: string,
+    opts?: { networkPassphrase?: string; address?: string }
+  ) => Promise<string>;
+  /** Sign a message/blob with the active wallet. */
+  signMessage: (
+    message: string,
+    opts?: { networkPassphrase?: string; address?: string }
+  ) => Promise<string>;
+}
+
+// ─── WalletConnect v2 ─────────────────────────────────────────────────────────
+
+/** Stellar CAIP-2 chain IDs for WalletConnect namespaces. */
+export type WalletConnectChain = "stellar:pubnet" | "stellar:testnet";
+
+/** Init options for useWalletConnect. projectId is required (Reown/WalletConnect dashboard). */
+export interface WalletConnectOptions {
+  /** WalletConnect / Reown project ID from https://cloud.reown.com */
+  projectId: string;
+  /** App metadata shown in the wallet during connection. */
+  metadata: {
+    name: string;
+    description: string;
+    url: string;
+    icons: string[];
+  };
+  /** Stellar chain to request. Defaults to "stellar:testnet". */
+  chain?: WalletConnectChain;
+  /** Relay URL. Defaults to wss://relay.walletconnect.com */
+  relayUrl?: string;
+}
+
+export interface WalletConnectState {
+  /** Connected Stellar public key, null when not connected. */
+  publicKey: string | null;
+  isConnected: boolean;
+  /** True while connect() is in-flight (awaiting wallet approval). */
+  isConnecting: boolean;
+  /** WalletConnect pairing URI — show as QR code or deep-link. */
+  uri: string | null;
+  error: Error | null;
+}
+
+export interface UseWalletConnectReturn extends WalletConnectState {
+  /**
+   * Initiate a WalletConnect session. Resolves once the wallet approves.
+   * Use the `uri` state to display the QR code/deep-link while awaiting approval.
+   */
+  connect: () => Promise<string | null>;
+  /** Disconnect and delete the active WalletConnect session. */
+  disconnect: () => Promise<void>;
+  /** Sign a Stellar transaction XDR via the connected wallet. */
+  signTransaction: (
+    xdr: string,
+    opts?: { networkPassphrase?: string }
+  ) => Promise<string>;
 }
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────

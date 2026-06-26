@@ -9,6 +9,22 @@ export interface UseOfferBookOptions {
   refetchInterval?: number;
 }
 
+/**
+ * Fetch the DEX order book for a given asset pair from Horizon.
+ *
+ * @example
+ * ```tsx
+ * const { data, isLoading, error } = useOfferBook({
+ *   selling: Asset.native(),
+ *   buying: new Asset("USDC", "GA5ZSE..."),
+ *   limit: 10,
+ *   refetchInterval: 5000,
+ * });
+ *
+ * // data.bids — buy orders
+ * // data.asks — sell orders
+ * ```
+ */
 export function useOfferBook(options: UseOfferBookOptions) {
   const { config } = useStellarContext();
   const [data, setData] = useState<Horizon.ServerApi.OrderbookRecord | null>(null);
@@ -46,8 +62,6 @@ export function useOfferBook(options: UseOfferBookOptions) {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  // We stringify the asset objects to properly establish the React dependency array hook references.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.horizonUrl, options.selling.toString(), options.buying.toString(), options.limit, options.refetchInterval]);
 
   return { data, isLoading, error };

@@ -1,0 +1,39 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    versioning-strategy: increase
+    groups:
+      stellar:
+        patterns:
+          - '@stellar/*'
+      react:
+        patterns:
+          - react
+          - react-dom
+          - '@types/react'
+          - '@types/react-dom'
+      testing:
+        patterns:
+          - 'vitest'
+          - '@testing-library/*'
+          - 'jsdom'
+          - 'react-test-renderer'
+          - '@types/react-test-renderer'
+      typescript-eslint:
+        patterns:
+          - '@typescript-eslint/*'
+      changesets:
+        patterns:
+          - '@changesets/*'
+      semantic-release:
+        patterns:
+          - semantic-release
+          - '@semantic-release/*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

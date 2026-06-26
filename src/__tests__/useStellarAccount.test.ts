@@ -12,13 +12,27 @@ import { Horizon } from "@stellar/stellar-sdk";
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-vi.mock("@stellar/stellar-sdk", () => {
-  const mockLoadAccount = vi.fn();
+const actualMockLoadAccount = vi.fn();
+
+vi.mock("../utils/memoizedServers", () => {
   return {
-    Horizon: {
-      Server: vi.fn().mockImplementation(() => ({
-        loadAccount: mockLoadAccount,
-      })),
+    getHorizonServer: vi.fn().mockReturnValue({
+      loadAccount: (pubKey: string) => actualMockLoadAccount(pubKey),
+    }),
+    clearMemoizedServers: vi.fn(),
+  };
+});
+
+vi.mock("@stellar/stellar-sdk", async (importOriginal) => {
+  const actual = await importOriginal() as any;
+  return {
+    ...actual,
+    StrKey: {
+      ...actual.StrKey,
+      isValidEd25519PublicKey: vi.fn().mockImplementation((val) => {
+        if (!val || val === "invalid-key") return false;
+        return true;
+      }),
     },
   };
 });
@@ -31,7 +45,7 @@ vi.mock("../context", () => ({
   }),
 }));
 
-const mockLoadAccount = vi.mocked(new Horizon.Server("").loadAccount);
+const mockLoadAccount = actualMockLoadAccount;
 
 const XLM_ONLY_RESPONSE = {
   account_id: "GABC...",
@@ -76,6 +90,114 @@ describe("useStellarAccount", () => {
     expect(result.current.data?.balances).toHaveLength(1);
     expect(result.current.data?.balances[0].isNative).toBe(true);
     expect(result.current.data?.balances[0].balance).toBe("100.0000000");
+  });
+
+  it("handles account with multiple custom assets", async () => {
+    mockLoadAccount.mockResolvedValueOnce(MULTI_ASSET_RESPONSE);
+
+    const { result } = renderHook(() => useStellarAccount("GABC..."));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.data?.balances).toHaveLength(3);
+    expect(result.current.data?.balances.find(b => b.assetCode === "USDC")).toBeDefined();
+    expect(result.current.data?.balances.find(b => b.assetCode === "STELLAR")).toBeDefined();
+  });
+
+  it("handles null publicKey by resetting state", async () => {
+    const { result } = renderHook(() => useStellarAccount(null));
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+    expect(mockLoadAccount).not.toHaveBeenCalled();
+  });
+
+  it("respects the disabled state (enabled: false)", async () => {
+    const { result } = renderHook(() => useStellarAccount("GABC...", { enabled: false }));
+
+    expect(result.current.data).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+    expect(mockLoadAccount).not.toHaveBeenCalled();
+  });
+
+  it("handles fetch errors correctly", async () => {
+    const error = new Error("Account not found");
+    mockLoadAccount.mockRejectedValueOnce(error);
+
+    const { result } = renderHook(() => useStellarAccount("GABC..."));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.error).toBe(error);
+    expect(result.current.data).toBeNull();
+  });
+});
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, act, waitFor } from "@testing-library/react";
+import { useStellarAccount } from "../useStellarAccount";
+import React from "react";
+
+// ── Mock Horizon Server ───────────────────────────────────────────────────────
+
+const mockLoadAccount = vi.fn();
+
+vi.mock("../../context/StellarContext", () => ({
+  useStellarContext: () => ({
+    horizonServer: {
+      loadAccount: mockLoadAccount,
+    },
+    network: "testnet",
+  }),
+}));
+
+// ── Mock account response ─────────────────────────────────────────────────────
+
+const MOCK_PUBLIC_KEY =
+  "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN";
+
+const mockAccountResponse = {
+  account_id: MOCK_PUBLIC_KEY,
+  sequence: "123456789",
+  balances: [
+    {
+      balance: "100.0000000",
+      asset_type: "native",
+    },
+    {
+      balance: "50.0000000",
+      asset_type: "credit_alphanum4",
+      asset_code: "USDC",
+      asset_issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+    },
+  ],
+  subentry_count: 2,
+  thresholds: { low_threshold: 0, med_threshold: 0, high_threshold: 0 },
+  flags: { auth_required: false, auth_revocable: false, auth_immutable: false },
+  signers: [{ weight: 1, key: MOCK_PUBLIC_KEY, type: "ed25519_public_key" }],
+  data: {},
+  last_modified_ledger: 999,
+};
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe("useStellarAccount", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("handles account with no trustlines (XLM only)", async () => {
+    mockLoadAccount.mockResolvedValueOnce(XLM_ONLY_RESPONSE);
+
+    const { result } = renderHook(() => useStellarAccount("GABC..."));
+
+    expect(result.current.isLoading).toBe(true);
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.data?.balances).toHaveLength(1);
+    const firstBalance = result.current.data?.balances[0];
+    expect(firstBalance?.isNative).toBe(true);
+    expect(firstBalance?.balance).toBe("100.0000000");
   });
 
   it("handles account with multiple custom assets", async () => {

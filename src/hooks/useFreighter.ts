@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer } from "react";
 import {
   isConnected,
   getAddress,
@@ -8,18 +8,54 @@ import {
   signAuthEntry,
   signMessage,
 } from "@stellar/freighter-api";
-import type { FreighterState, SignTransactionOptions, UseFreighterReturn } from "../types";
+import { useOptionalStellarContext } from "../context";
+import type {
+  FreighterState,
+  SignTransactionOptions,
+  UseFreighterOptions,
+  UseFreighterReturn,
+} from "../types";
+
+// ─── Network mismatch helpers ─────────────────────────────────────────────────
+
+function buildNetworkPassphraseWarning(
+  walletNetwork: string | null,
+  expectedPassphrase: string,
+): string {
+  const networkLabel = walletNetwork ?? "a different network";
+  return (
+    `Freighter is connected to ${networkLabel}, which does not match this app's ` +
+    `configured network (${expectedPassphrase}). Switch the network in Freighter or ` +
+    `update your StellarProvider configuration to avoid signing on the wrong network.`
+  );
+}
+
+function getNetworkPassphraseMismatch(
+  isConnected: boolean,
+  walletPassphrase: string | null,
+  expectedPassphrase: string | null,
+): boolean {
+  return Boolean(
+    isConnected &&
+      walletPassphrase &&
+      expectedPassphrase &&
+      walletPassphrase !== expectedPassphrase
+  );
+}
+import { asPublicKey, unsafeAsXdrString, type StellarPublicKey, type StellarXdrString } from "../types";
 
 // ─── State Machine ────────────────────────────────────────────────────────────
 
 type Action =
   | { type: "SET_LOADING"; payload: boolean }
-  | { type: "SET_CONNECTED"; publicKey: string; network: string; networkPassphrase: string }
+  | { type: "SET_CONNECTED"; publicKey: StellarPublicKey; network: string; networkPassphrase: string }
   | { type: "SET_DISCONNECTED" }
   | { type: "SET_NOT_INSTALLED" }
   | { type: "SET_ERROR"; payload: Error };
 
-function reducer(state: FreighterState, action: Action): FreighterState {
+type WalletReducerState = Omit<FreighterState, "networkPassphraseMismatch" | "networkPassphraseWarning">;
+
+function reducer(state: WalletReducerState, action: Action): WalletReducerState {
   switch (action.type) {
     case "SET_LOADING":
       return { ...state, isLoading: action.payload, error: null };
@@ -37,6 +73,7 @@ function reducer(state: FreighterState, action: Action): FreighterState {
     case "SET_DISCONNECTED":
       return {
         ...state,
+        isInstalled: true,
         isConnected: false,
         publicKey: null,
         network: null,
@@ -53,7 +90,7 @@ function reducer(state: FreighterState, action: Action): FreighterState {
   }
 }
 
-const initial: FreighterState = {
+const initial: Omit<FreighterState, "networkPassphraseMismatch" | "networkPassphraseWarning"> = {
   isInstalled: false,
   isConnected: false,
   publicKey: null,
@@ -72,12 +109,30 @@ const initial: FreighterState = {
  * ```tsx
  * const { isConnected, publicKey, connect } = useFreighter();
  *
- * if (!isConnected) return <button onClick={connect}>Connect Wallet</button>;
+ * if (!isConnected) return <button onClick={connect}>Connect</button>;
  * return <p>Connected: {publicKey}</p>;
  * ```
  */
-export function useFreighter(): UseFreighterReturn {
+export function useFreighter(options?: UseFreighterOptions): UseFreighterReturn {
   const [state, dispatch] = useReducer(reducer, initial);
+  const stellarContext = useOptionalStellarContext();
+  const expectedNetworkPassphrase =
+    options?.expectedNetworkPassphrase ?? stellarContext?.config.networkPassphrase ?? null;
+
+  const networkPassphraseMismatch = useMemo(
+    () =>
+      getNetworkPassphraseMismatch(
+        state.isConnected,
+        state.networkPassphrase,
+        expectedNetworkPassphrase,
+      ),
+    [state.isConnected, state.networkPassphrase, expectedNetworkPassphrase],
+  );
+
+  const networkPassphraseWarning = useMemo(() => {
+    if (!networkPassphraseMismatch || !expectedNetworkPassphrase) return null;
+    return buildNetworkPassphraseWarning(state.network, expectedNetworkPassphrase);
+  }, [networkPassphraseMismatch, expectedNetworkPassphrase, state.network]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +156,7 @@ export function useFreighter(): UseFreighterReturn {
           if (cancelled) return;
           dispatch({
             type: "SET_CONNECTED",
-            publicKey: address,
+            publicKey: asPublicKey(address),
             network: networkDetails.network ?? "",
             networkPassphrase: networkDetails.networkPassphrase ?? "",
           });
@@ -122,17 +177,31 @@ export function useFreighter(): UseFreighterReturn {
   const connect = useCallback(async () => {
     dispatch({ type: "SET_LOADING", payload: true });
     try {
-      const { address, error } = await requestAccess();
-      if (error) throw new Error(error.message);
-      if (!address) throw new Error("Failed to get address");
+      try {
+        const { address, error } = await requestAccess();
+        if (error) {
+          dispatch({ type: "SET_ERROR", payload: new Error(error.message || String(error)) });
+          return;
+        }
+        if (!address) {
+          dispatch({ type: "SET_ERROR", payload: new Error("Failed to get address") });
+          return;
+        }
 
-      const networkDetails = await getNetworkDetails();
-      dispatch({
-        type: "SET_CONNECTED",
-        publicKey: address,
-        network: networkDetails.network ?? "",
-        networkPassphrase: networkDetails.networkPassphrase ?? "",
-      });
+        const networkDetails = await getNetworkDetails();
+        dispatch({
+          type: "SET_CONNECTED",
+          publicKey: asPublicKey(address),
+          network: networkDetails.network ?? "",
+          networkPassphrase: networkDetails.networkPassphrase ?? "",
+        });
+      } catch (innerErr) {
+        // Some browsers may throw synchronous DOMExceptions when a popup is
+        // blocked — surface this as an error state instead of letting it
+        // propagate as an unhandled rejection.
+        dispatch({ type: "SET_ERROR", payload: innerErr instanceof Error ? innerErr : new Error(String(innerErr)) });
+        return;
+      }
     } catch (err) {
       dispatch({ type: "SET_ERROR", payload: err instanceof Error ? err : new Error(String(err)) });
     }
@@ -143,19 +212,19 @@ export function useFreighter(): UseFreighterReturn {
   }, []);
 
   const signTx = useCallback(
-    async (xdr: string, opts?: SignTransactionOptions): Promise<string> => {
+    async (xdr: StellarXdrString, opts?: SignTransactionOptions): Promise<StellarXdrString> => {
       const { signedTxXdr, error } = await signTransaction(xdr, {
-  ...(opts?.networkPassphrase && { networkPassphrase: opts.networkPassphrase }),
-  ...(opts?.address && { address: opts.address }),
-});
+        ...(opts?.networkPassphrase && { networkPassphrase: opts.networkPassphrase }),
+        ...(opts?.address && { address: opts.address }),
+      });
       if (error) throw new Error(error.message);
-      return signedTxXdr;
+      return unsafeAsXdrString(signedTxXdr);
     },
     []
   );
 
   const signEntry = useCallback(
-    async (entryPreimageXdr: string): Promise<string> => {
+    async (entryPreimageXdr: StellarXdrString): Promise<StellarXdrString> => {
       const publicKey = state.publicKey;
       if (!publicKey) throw new Error("Wallet not connected");
       const { signedAuthEntry, error } = await signAuthEntry(entryPreimageXdr, {
@@ -163,7 +232,7 @@ export function useFreighter(): UseFreighterReturn {
       });
       if (error) throw new Error(error.message);
       if (!signedAuthEntry) throw new Error("No signed auth entry returned");
-      return signedAuthEntry;
+      return unsafeAsXdrString(signedAuthEntry);
     },
     [state.publicKey]
   );
@@ -181,12 +250,17 @@ export function useFreighter(): UseFreighterReturn {
     [state.publicKey]
   );
 
-  return {
-    ...state,
-    connect,
-    disconnect,
-    signTransaction: signTx,
-    signAuthEntry: signEntry,
-    signBlob,
-  };
+  return useMemo(
+    () => ({
+      ...state,
+      networkPassphraseMismatch,
+      networkPassphraseWarning,
+      connect,
+      disconnect,
+      signTransaction: signTx,
+      signAuthEntry: signEntry,
+      signBlob,
+    }),
+    [state, networkPassphraseMismatch, networkPassphraseWarning, connect, disconnect, signTx, signEntry, signBlob]
+  );
 }

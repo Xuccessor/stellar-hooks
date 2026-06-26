@@ -5,34 +5,13 @@
  * @license MIT
  */
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
-import { rpc, xdr } from "@stellar/stellar-sdk";
+import { useCallback, useMemo } from "react";
+import { xdr } from "@stellar/stellar-sdk";
+import * as rpc from "@stellar/stellar-sdk/rpc";
 import { useStellarContext } from "../context";
 import type { LedgerEntryState } from "../types";
 import { getCache, setCache } from "../utils";
-
-// ─── Reducer ──────────────────────────────────────────────────────────────────
-
-type Action =
-  | { type: "FETCH_START" }
-  | { type: "FETCH_SUCCESS"; payload: rpc.Api.LedgerEntryResult }
-  | { type: "FETCH_NOT_FOUND" }
-  | { type: "FETCH_ERROR"; payload: Error };
-
-function reducer(state: LedgerEntryState, action: Action): LedgerEntryState {
-  switch (action.type) {
-    case "FETCH_START":
-      return { ...state, isLoading: true, error: null };
-    case "FETCH_SUCCESS":
-      return { data: action.payload, isLoading: false, error: null, lastFetchedAt: new Date(), refetch: state.refetch };
-    case "FETCH_NOT_FOUND":
-      return { data: null, isLoading: false, error: null, lastFetchedAt: new Date(), refetch: state.refetch };
-    case "FETCH_ERROR":
-      return { ...state, isLoading: false, error: action.payload };
-    default:
-      return state;
-  }
-}
+import { useStellarQuery } from "./useStellarQuery";
 
 // ─── Options ──────────────────────────────────────────────────────────────────
 
@@ -83,70 +62,43 @@ export function useLedgerEntry(
 ): LedgerEntryState {
   const { enabled = true, refetchInterval = 0, cacheTTL = 60000 } = options;
   const { config } = useStellarContext();
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const refetchRef = useRef<(force?: boolean) => Promise<void>>(() => Promise.resolve());
-
-  const [state, dispatch] = useReducer(reducer, {
-    data: null,
-    isLoading: false,
-    error: null,
-    lastFetchedAt: null,
-    refetch: () => refetchRef.current(true),
-  });
-
-  const fetch = useCallback(async (force = false) => {
-    if (!ledgerKey) return;
+  const fetch = useCallback(async () => {
+    if (!ledgerKey) return null;
 
     const cacheKey = `ledger-entry-${ledgerKey.toXDR("base64")}-${config.network}`;
+    const cached = getCache<rpc.Api.LedgerEntryResult>(cacheKey);
+    if (cached) return cached;
 
-    if (!force) {
-      const cached = getCache<rpc.Api.LedgerEntryResult>(cacheKey);
-      if (cached) {
-        dispatch({ type: "FETCH_SUCCESS", payload: cached });
-        return;
-      }
+    const server = new rpc.Server(config.sorobanRpcUrl);
+    const result = await server.getLedgerEntries(ledgerKey);
+
+    if (result.entries.length === 0) return null;
+
+    const entry = result.entries[0];
+    if (entry) {
+      setCache(cacheKey, entry, cacheTTL);
+      return entry;
     }
 
-    dispatch({ type: "FETCH_START" });
-
-    try {
-      const server = new rpc.Server(config.sorobanRpcUrl);
-      const result = await server.getLedgerEntries(ledgerKey);
-
-      if (result.entries.length === 0) {
-        dispatch({ type: "FETCH_NOT_FOUND" });
-        return;
-      }
-
-      const entry = result.entries[0];
-      if (entry) {
-        setCache(cacheKey, entry, cacheTTL);
-        dispatch({ type: "FETCH_SUCCESS", payload: entry });
-      } else {
-        dispatch({ type: "FETCH_NOT_FOUND" });
-      }
-    } catch (err) {
-      dispatch({
-        type: "FETCH_ERROR",
-        payload: err instanceof Error ? err : new Error(String(err)),
-      });
-    }
+    return null;
   }, [ledgerKey, config.sorobanRpcUrl, config.network, cacheTTL]);
 
-  // Keep ref fresh so state.refetch always points to the latest
-  useEffect(() => { refetchRef.current = fetch; }, [fetch]);
+  const state = useStellarQuery<rpc.Api.LedgerEntryResult | null>(fetch, {
+    enabled: enabled && Boolean(ledgerKey),
+    refetchInterval,
+    initialData: null,
+  });
 
-  useEffect(() => {
-    if (!enabled || !ledgerKey) return;
-    void fetch();
-  }, [enabled, ledgerKey, fetch]);
-
-  useEffect(() => {
-    if (!enabled || !ledgerKey || refetchInterval <= 0) return;
-    intervalRef.current = setInterval(() => void fetch(true), refetchInterval);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [enabled, ledgerKey, refetchInterval, fetch]);
-
-  return state;
+  return useMemo(
+    () => ({
+      data: state.data,
+      isLoading: state.isLoading,
+      isRefetching: state.isRefetching,
+      error: state.error,
+      lastFetchedAt: state.lastFetchedAt,
+      refetch: state.refetch,
+    }),
+    [state.data, state.isLoading, state.isRefetching, state.error, state.lastFetchedAt, state.refetch]
+  ) as LedgerEntryState;
 }

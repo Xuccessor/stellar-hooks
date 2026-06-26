@@ -15,8 +15,19 @@
     "rootDir": "src",
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@creit-tech/stellar-wallets-kit/sdk": ["./src/__mocks__/@creit-tech/stellar-wallets-kit-sdk.ts"]
+    }
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist", "examples"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "examples",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/__tests__",
+    "src/**/*.test-d.ts"
+  ]
 }

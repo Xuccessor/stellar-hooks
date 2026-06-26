@@ -13,9 +13,11 @@ import {
   TransactionBuilder,
 } from "@stellar/stellar-sdk";
 import { useStellarContext } from "../context";
-import { useTransaction } from "./useTransaction";
+import { useTransactionCore } from "./useTransactionCore";
 import { useFreighter } from "./useFreighter";
-import type { TransactionStatus } from "../types";
+import type { TransactionStatus, StellarTransactionError } from "../types";
+import { unsafeAsXdrString } from "../types";
+import { validatePublicKey } from "../utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,7 +58,7 @@ export interface UsePathPaymentOptions {
   /** Callback fired when the transaction is successfully confirmed. */
   onSuccess?: (hash: string) => void;
   /** Callback fired when the transaction fails or an error occurs. */
-  onError?: (error: Error) => void;
+  onError?: (error: StellarTransactionError) => void;
 }
 
 /**
@@ -86,7 +88,7 @@ export interface UsePathPaymentReturn {
   submit: () => Promise<void>;
   status: TransactionStatus;
   hash: string | null;
-  error: Error | null;
+  error: StellarTransactionError | null;
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;
@@ -149,7 +151,7 @@ export function usePathPayment(
     onError,
   } = options;
 
-  const { submit: submitXdr, reset, ...txState } = useTransaction({
+  const { submit: submitXdr, reset, ...txState } = useTransactionCore({
     mode: "classic",
     timeoutSeconds,
     ...(onSuccess && { onSuccess }),
@@ -162,6 +164,14 @@ export function usePathPayment(
   const submit = useCallback(async () => {
     if (!publicKey) {
       throw new Error("Freighter is not connected. Call connect() first.");
+    }
+
+    validatePublicKey(destination, "destination");
+    if (sendAsset.type === "credit") {
+      validatePublicKey(sendAsset.issuer, "sendAsset.issuer");
+    }
+    if (destAsset.type === "credit") {
+      validatePublicKey(destAsset.issuer, "destAsset.issuer");
     }
 
     // 1. Load source account
@@ -205,7 +215,7 @@ export function usePathPayment(
     const builtXdr = tx.toXDR();
 
     // 5. Sign via Freighter
-    const signedXdr = await signTransaction(builtXdr, {
+    const signedXdr = await signTransaction(unsafeAsXdrString(builtXdr), {
       networkPassphrase: config.networkPassphrase,
     });
 

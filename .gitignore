@@ -1,3 +1,4 @@
+﻿node_modules
 node_modules/
 dist/
 .env
@@ -6,3 +7,5 @@ dist/
 .DS_Store
 coverage/
 AGENTS.md
+docs/.vitepress/dist
+docs/.vitepress/cache
